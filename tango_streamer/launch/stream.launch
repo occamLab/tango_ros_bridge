@@ -1,0 +1,5 @@
+<launch>
+<node pkg="tango_streamer" type="image_server.py" name="image_server"/>
+<node pkg="tango_streamer" type="pose_server.py" name="pose_server" output="screen"/>
+<node pkg="tango_streamer" type="pointcloud_server.py" name="pointcloud_server" output="screen"/>
+</launch>
