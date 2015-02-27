@@ -8,7 +8,7 @@ import socket
 import rospy
 from sensor_msgs.msg import CompressedImage, PointCloud
 from geometry_msgs.msg import PoseStamped, Point32
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64, Float64MultiArray
 import sys
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from math import pi
@@ -20,6 +20,7 @@ import tf
 
 pub_pose = rospy.Publisher('/tango_pose', PoseStamped, queue_size=10)
 pub_angles = rospy.Publisher('/tango_angles', Float64MultiArray, queue_size=10)
+pub_clock = rospy.Publisher('/tango_clock', Float64, queue_size=10)
 
 rospy.init_node("pose_server")
 
@@ -49,6 +50,15 @@ while True:
 					start = all_data.find(begin_pose_marker)
 					pose = all_data[start+len(begin_pose_marker):index]
 					pose_vals = pose.split(",")
+					print pose_vals
+					tango_timestamp = pose_vals[-1]
+					print "constructing message"
+					ROS_timestamp = rospy.Time.now()
+					pub_clock.publish(ROS_timestamp.to_time() - float(tango_timestamp))
+					print "publishing message!"
+					print "current time ", ROS_timestamp.to_time()
+					print "current tango time ", tango_timestamp
+					pose_vals = pose_vals[0:-1]
 					msg = PoseStamped()
 					# might need to revisit time stamps
 					msg.header.stamp = rospy.Time.now()
@@ -78,7 +88,6 @@ while True:
 												 euler_angles_transformed[1],
 												 euler_angles_transformed[2])
 					pub_pose.publish(msg)
-					print "SENDING TRANFORM!!"
 					br.sendTransform((msg.pose.position.x,
 									  msg.pose.position.y,
 									  msg.pose.position.z),
@@ -86,9 +95,8 @@ while True:
 									 					   euler_angles_depth_camera[1],
 									 					   euler_angles_depth_camera[2]),
 									 rospy.Time.now(),
-									 "depth_camera",			# this should be something different like "device"
+									 "device",			# this should be something different like "device"
 									 "odom")
-					print "TRANSFORM SENT"
 					all_data = all_data[index+len(end_pose_marker):]
 			except Exception as e:
 				print e

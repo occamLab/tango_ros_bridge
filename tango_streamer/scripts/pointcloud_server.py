@@ -7,6 +7,7 @@ A simple echo server
 import socket
 import rospy
 import time
+from std_msgs.msg import Float64
 from sensor_msgs.msg import CompressedImage, PointCloud
 from geometry_msgs.msg import PoseStamped, Point32
 import sys
@@ -15,6 +16,13 @@ import sys
 # new data is available
 # need to better compress point clouds
 
+tango_clock_offset = 0
+
+def handle_tango_clock(msg):
+	global tango_clock_offset
+	tango_clock_offset = msg.data
+
+clock_sub = rospy.Subscriber('/tango_clock', Float64, handle_tango_clock)
 pub_point_cloud = rospy.Publisher('/point_cloud', PointCloud, queue_size=10)
 
 rospy.init_node("pointcloud_stream")
@@ -45,11 +53,14 @@ while True:
 					t = time.time()
 					point_cloud = all_data[start+len(begin_point_cloud_marker):index]
 					point_cloud_vals = point_cloud.split(',')
+					timestamp = point_cloud_vals[0]
+					print timestamp
+					point_cloud_vals = point_cloud_vals[1:]
 					print len(point_cloud_vals)
 					if len(point_cloud_vals)>1:
 						point_cloud_vals = [float(p) for p in point_cloud_vals]
 						msg = PointCloud()
-						msg.header.stamp = rospy.Time.now()
+						msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
 						msg.header.frame_id = 'depth_camera'
 
 						for i in range(0,len(point_cloud_vals),3):
@@ -61,9 +72,9 @@ while True:
 					    							  x=point_cloud_vals[i+2]))
 						pub_point_cloud.publish(msg)
 					all_data = all_data[index+len(end_point_cloud_marker):]
+					print "timestamp", timestamp
 					print "num vals ", len(point_cloud_vals)/3
 					print "bytes in pc message ", len(point_cloud)
-					print "time to create point cloud message", (time.time() - t)
 			except:
 				# assume we had a bogus message
 				all_data = ""
