@@ -38,63 +38,63 @@ unsigned char cameraImageBufferRGBA[4*1280*720];
 
 float xyzBuffer[3*60000];			// assume 60000 is the highest number of points
 int xyzValid = 0;
-double poseBuffer[7];
-
-
-unsigned char
-clamp(float v, unsigned char min, unsigned char max) {
-	if (v > max) {
-		return max;
-	}
-	if (v < min) {
-		return min;
-	}
-	return (unsigned char) ((int)v);
-}
-
-void yuv2rgb(float yValue, float uValue, float vValue,
-        unsigned char *r, unsigned char *g, unsigned char *b) {
-    float r_as_float = yValue + (1.370705 * (vValue-128));
-    float g_as_float = yValue - (0.698001 * (vValue-128)) - (0.337633 * (uValue-128));
-    float b_as_float = yValue + (1.732446 * (uValue-128));
-
-    *r = clamp(r_as_float, 0, 255);
-    *g = clamp(g_as_float, 0, 255);
-    *b = clamp(b_as_float, 0, 255);
-}
+double poseBuffer[8];
+double depthCameraPoseBuffer[8];
+double lastFrameTimeStamp = 0.0;
 
 static void onFrameAvailable(void* context, TangoCameraId camera, const TangoImageBuffer* buffer) {
+	lastFrameTimeStamp = buffer->timestamp;
 	memcpy(cameraImageBufferRGBA, buffer->data, bufferSize);
 }
 
 static void onXYZijAvailable(void* context, const TangoXYZij* XYZ_ij) {
 	// clear out any old points
 	int i;
+	xyzValid = XYZ_ij->xyz_count;
 	for (i = 0; i < 3*20000; i++) {
 		xyzBuffer[i] = 0;
 	}
-	for (i = 0; i < XYZ_ij->xyz_count; i++) {
-		xyzBuffer[i*3] = XYZ_ij->xyz[i][0];
-		xyzBuffer[i*3+1] = XYZ_ij->xyz[i][1];
-		xyzBuffer[i*3+2] = XYZ_ij->xyz[i][2];
+	xyzBuffer[0] = XYZ_ij->timestamp;
+	for (i = 1; i < XYZ_ij->xyz_count; i++) {
+		xyzBuffer[(i-1)*3+1] = XYZ_ij->xyz[i][0];
+		xyzBuffer[(i-1)*3+2] = XYZ_ij->xyz[i][1];
+		xyzBuffer[(i-1)*3+3] = XYZ_ij->xyz[i][2];
 	}
-	xyzValid = XYZ_ij->xyz_count;
-	LOGI("connectOnXYZijAvailable Number of ij points: %i %i\n", XYZ_ij->ij_rows, XYZ_ij->ij_cols);
-	LOGI("connectOnXYZijAvailable Number of points: %i\n", XYZ_ij->xyz_count);
 }
 
 static void onPoseAvailable(void* context, const TangoPoseData* pose) {
- /* LOGI("Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
-       pose->translation[0], pose->translation[1], pose->translation[2],
-       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-       pose->orientation[3]);*/
-	poseBuffer[0] = pose->translation[0];
-	poseBuffer[1] = pose->translation[1];
-	poseBuffer[2] = pose->translation[2];
-	poseBuffer[3] = pose->orientation[0];
-	poseBuffer[4] = pose->orientation[1];
-	poseBuffer[5] = pose->orientation[2];
-	poseBuffer[6] = pose->orientation[3];
+	if (pose->frame.target == TANGO_COORDINATE_FRAME_DEVICE) {
+		LOGI("Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
+		       pose->translation[0], pose->translation[1], pose->translation[2],
+		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
+		       pose->orientation[3]);
+		poseBuffer[0] = pose->translation[0];
+		poseBuffer[1] = pose->translation[1];
+		poseBuffer[2] = pose->translation[2];
+		poseBuffer[3] = pose->orientation[0];
+		poseBuffer[4] = pose->orientation[1];
+		poseBuffer[5] = pose->orientation[2];
+		poseBuffer[6] = pose->orientation[3];
+		poseBuffer[7] = pose->timestamp; // the last is the time
+	} else if (pose->frame.target == TANGO_COORDINATE_FRAME_CAMERA_COLOR) {
+		LOGI("Depth Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
+		       pose->translation[0], pose->translation[1], pose->translation[2],
+		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
+		       pose->orientation[3]);
+		depthCameraPoseBuffer[0] = pose->translation[0];
+		depthCameraPoseBuffer[1] = pose->translation[1];
+		depthCameraPoseBuffer[2] = pose->translation[2];
+		depthCameraPoseBuffer[3] = pose->orientation[0];
+		depthCameraPoseBuffer[4] = pose->orientation[1];
+		depthCameraPoseBuffer[5] = pose->orientation[2];
+		depthCameraPoseBuffer[6] = pose->orientation[3];
+		depthCameraPoseBuffer[7] = pose->timestamp;
+	} else {
+		LOGI("Unknown Frame Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
+		       pose->translation[0], pose->translation[1], pose->translation[2],
+		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
+		       pose->orientation[3]);
+	}
 }
 
 bool TangoInitialize(JNIEnv* env, jobject activity) {
@@ -139,12 +139,26 @@ bool TangoConnectCallbacks() {
 	  return false;
   }
 
-  TangoCoordinateFramePair pair = {TANGO_COORDINATE_FRAME_START_OF_SERVICE, TANGO_COORDINATE_FRAME_DEVICE };
-  if (TangoService_connectOnPoseAvailable(1, &pair, onPoseAvailable)
+  TangoCoordinateFramePair* pairs = (TangoCoordinateFramePair*)malloc(2*sizeof(TangoCoordinateFramePair));
+//  TangoCoordinateFramePair pair = {TANGO_COORDINATE_FRAME_START_OF_SERVICE, TANGO_COORDINATE_FRAME_DEVICE };
+  pairs[0].base = TANGO_COORDINATE_FRAME_START_OF_SERVICE;
+  pairs[0].target = TANGO_COORDINATE_FRAME_CAMERA_COLOR;
+  pairs[1].base = TANGO_COORDINATE_FRAME_START_OF_SERVICE;
+  pairs[1].target = TANGO_COORDINATE_FRAME_DEVICE;
+  // Currently cannot get the pose of the depth camera
+  if (TangoService_connectOnPoseAvailable(2, pairs, onPoseAvailable)
       != TANGO_SUCCESS) {
     LOGI("TangoService_connectOnPoseAvailable(): Failed");
     return false;
   }
+/*
+  TangoCoordinateFramePair pair2 = {TANGO_COORDINATE_FRAME_START_OF_SERVICE, TANGO_COORDINATE_FRAME_CAMERA_DEPTH };
+  if (TangoService_connectOnPoseAvailable(1, &pair2, onPoseAvailable)
+      != TANGO_SUCCESS) {
+    LOGI("TangoService_connectOnPoseAvailable(): Failed");
+    return false;
+  }
+*/
   return true;
 }
 
@@ -190,7 +204,6 @@ JNIEXPORT void JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJ
   DisconnectTango();
 }
 
-//jbyteArray instead of void
 JNIEXPORT jbyteArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnArray(JNIEnv *env, jobject This)
 {
 	pixelBuffer = (*env)->NewByteArray(env, bufferSize);
@@ -198,10 +211,45 @@ JNIEXPORT jbyteArray JNICALL Java_com_projecttango_experiments_nativehellotango_
     return pixelBuffer;
 }
 
+JNIEXPORT jdouble JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_getFrameTimestamp(JNIEnv *env, jobject This)
+{
+	return lastFrameTimeStamp;
+}
+
 JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnPoseArray(JNIEnv *env, jobject This)
 {
-	jdoubleArray poseDoubleArray = (*env)->NewDoubleArray(env, 7);
-	(*env)->SetDoubleArrayRegion (env, poseDoubleArray, 0, 7, poseBuffer);
+	jdoubleArray poseDoubleArray = (*env)->NewDoubleArray(env, 8);
+	(*env)->SetDoubleArrayRegion (env, poseDoubleArray, 0, 8, poseBuffer);
+    return poseDoubleArray;
+}
+
+JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnIntrinsics(JNIEnv *env, jobject This)
+{
+	double intrinsicsArray[11];
+	jdoubleArray intrinsicsDoubleArray = (*env)->NewDoubleArray(env, 11);
+	TangoCameraIntrinsics ccIntrinsics;
+	TangoService_getCameraIntrinsics(TANGO_CAMERA_COLOR, &ccIntrinsics);
+
+	intrinsicsArray[0] = ccIntrinsics.width;
+	intrinsicsArray[1] = ccIntrinsics.height;
+	intrinsicsArray[2] = ccIntrinsics.fx;
+	intrinsicsArray[3] = ccIntrinsics.fy;
+	intrinsicsArray[4] = ccIntrinsics.cx;
+	intrinsicsArray[5] = ccIntrinsics.cy;
+	intrinsicsArray[6] = ccIntrinsics.distortion[0];
+	intrinsicsArray[7] = ccIntrinsics.distortion[1];
+	intrinsicsArray[8] = ccIntrinsics.distortion[2];
+	intrinsicsArray[9] = ccIntrinsics.distortion[3];
+	intrinsicsArray[10] = ccIntrinsics.distortion[4];
+
+	(*env)->SetDoubleArrayRegion(env, intrinsicsDoubleArray, 0, 11, intrinsicsArray);
+	return intrinsicsDoubleArray;
+}
+
+JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnDepthCameraPose(JNIEnv *env, jobject This)
+{
+	jdoubleArray poseDoubleArray = (*env)->NewDoubleArray(env, 8);
+	(*env)->SetDoubleArrayRegion (env, poseDoubleArray, 0, 8, depthCameraPoseBuffer);
     return poseDoubleArray;
 }
 
@@ -209,7 +257,7 @@ JNIEXPORT jfloatArray JNICALL Java_com_projecttango_experiments_nativehellotango
 {
 	// could have a race condition here
 	int xyzValidCopy = xyzValid;
-	jfloatArray pointCloudFloatArray = (*env)->NewFloatArray(env, xyzValidCopy*3);
-	(*env)->SetFloatArrayRegion (env, pointCloudFloatArray, 0, xyzValidCopy*3, xyzBuffer);
+	jfloatArray pointCloudFloatArray = (*env)->NewFloatArray(env, xyzValidCopy*3+1);
+	(*env)->SetFloatArrayRegion (env, pointCloudFloatArray, 0, xyzValidCopy*3+1, xyzBuffer);
     return pointCloudFloatArray;
 }

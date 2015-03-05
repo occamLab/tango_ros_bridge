@@ -36,7 +36,13 @@ public class TangoJNINative {
   // byte[] instead of void
   public static native byte[] returnArray();
   
+  public static native double getFrameTimestamp();
+  
   public static native double[] returnPoseArray();
+  
+  public static native double[] returnDepthCameraPose();
 
   public static native float[] returnPointCloud();
+  
+  public static native double[] returnIntrinsics();
 }

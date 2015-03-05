@@ -50,7 +50,7 @@ import android.content.SharedPreferences;
 import java.util.Arrays;
 
 /**
- * Main activity contros Tango lifecycle.
+ * Main activity controls Tango lifecycle.
  */
 public class HelloTangoActivity extends Activity {
   public static final String EXTRA_KEY_PERMISSIONTYPE = "PERMISSIONTYPE";
@@ -65,6 +65,7 @@ public class HelloTangoActivity extends Activity {
   final int portNumberImages = 11111;
   final int portNumberPointCloud = 11112;
   final int portNumberPose = 11113;
+  final int portNumberIntrinsics = 11114;
   
   private Socket kkSocketImages;
   private PrintWriter outImages;
@@ -74,6 +75,9 @@ public class HelloTangoActivity extends Activity {
   
   private Socket kkSocketPointCloud;
   private PrintWriter outPointCloud;
+  
+  private Socket kkSocketIntrinsics;
+  private PrintWriter outIntrinsics;
   
   protected Bitmap bm; 
   @Override
@@ -109,6 +113,10 @@ public class HelloTangoActivity extends Activity {
 	    	        
 					  kkSocketPose = new Socket(hostName, portNumberPose);
 					  outPose = new PrintWriter(kkSocketPose.getOutputStream(), true);
+					  
+					  kkSocketIntrinsics = new Socket(hostName, portNumberIntrinsics);
+					  outIntrinsics = new PrintWriter(kkSocketIntrinsics.getOutputStream(), true);
+
 					  connected = true;
 				  } catch (Exception ex) {
 					  ex.printStackTrace();
@@ -136,6 +144,7 @@ public class HelloTangoActivity extends Activity {
 					  kkSocketImages.close();
 					  kkSocketPose.close();
 					  kkSocketPointCloud.close();
+					  kkSocketIntrinsics.close();
 					  connected = false;
 					  System.out.println("CLOSINGDOWN!!!");
 				  } catch (Exception ex) {
@@ -179,7 +188,7 @@ public class HelloTangoActivity extends Activity {
    
   @Override
   protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-    // Check which request we're responding to.
+    // Check which request we're responding to. 
     if (requestCode == 0) {
         // Make sure the request was successful.
         if (resultCode == RESULT_CANCELED) {
@@ -196,23 +205,36 @@ public class HelloTangoActivity extends Activity {
           new Thread(new Runnable() {
               public void run() { 
             	  while (true) {
+            		  double[] currIntrinsics = TangoJNINative.returnIntrinsics();
+            		  if (connected) {
+            			  outIntrinsics.println("INTRINSICSSTARTINGRIGHTNOW");
+            			  String intrinsicsAsString = Arrays.toString(currIntrinsics);
+            			  outIntrinsics.println(intrinsicsAsString.substring(1,intrinsicsAsString.length() - 1));
+	                	  outIntrinsics.println("INTRINSICSENDINGRIGHTNOW");
+	            	  }
+            		  try {
+            			  Thread.sleep(1000);
+            		  } catch (InterruptedException ex) {
+            			  System.err.println("Something weird happened");
+            		  }
+	              }
+              }
+          }).start();
+          
+          new Thread(new Runnable() {
+              public void run() { 
+            	  while (true) {
             		  float[] currPointCloud = TangoJNINative.returnPointCloud();
             		  if (connected) {
             			  outPointCloud.println("POINTCLOUDSTARTINGRIGHTNOW");
             			  String pcAsString = Arrays.toString(currPointCloud);
-            			 /* String[] pointCloudAsStrings = new String[currPointCloud.length];
-            			  for (int i = 0; i < currPointCloud.length; i++) {
-            				  pointCloudAsStrings[i] = String.format("%.3f",currPointCloud[i]);
-            			  }
-            			  String pcAsString = Arrays.toString(pointCloudAsStrings);
-            			  */
             			  outPointCloud.println(pcAsString.substring(1,pcAsString.length() - 1));
 	                	  outPointCloud.println("POINTCLOUDENDINGRIGHTNOW");
 	            	  }
             		  try {
             			  Thread.sleep(1000);
             		  } catch (InterruptedException ex) {
-            			  System.err.println("Something w eird happened");
+            			  System.err.println("Something weird happened");
             		  }
 	              }
               }
@@ -221,6 +243,7 @@ public class HelloTangoActivity extends Activity {
           new Thread(new Runnable() {
               public void run() {
             	  while (true) {
+            		  double frameTimeStamp = TangoJNINative.getFrameTimestamp();
             		  byte[] myArray = TangoJNINative.returnArray();
             		  System.out.println(myArray.length);
             		  if (myArray != null && myArray.length != 0)  { 
@@ -230,12 +253,15 @@ public class HelloTangoActivity extends Activity {
                 	          @Override
                 	          public void run() {
                 	                ImageView image = (ImageView) findViewById(R.id.test_image);
-                	                image.invalidate();
+                	                image.invalidate(); 
                 	          }
                 	       });
                 	       if (connected) {
 	                		   try {
 	                			   outImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
+	                			   outImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
+	                			   outImages.println(frameTimeStamp);
+	                			   outImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
 	                			   bm.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketImages.getOutputStream());
 	                			   outImages.println("DEPTHFRAMEENDINGRIGHTNOW");
 	                		   } catch (IOException ex) {
@@ -257,6 +283,7 @@ public class HelloTangoActivity extends Activity {
             	  while (true) {
             		  double[] currPose = TangoJNINative.returnPoseArray();
             		  if (connected) {
+            			  System.out.println("currPose.length  " + currPose.length);
 	            		  outPose.println("POSESTARTINGRIGHTNOW");
 	            		  for (int i = 0; i < currPose.length; i++) {
 	            			  outPose.print(currPose[i]);
