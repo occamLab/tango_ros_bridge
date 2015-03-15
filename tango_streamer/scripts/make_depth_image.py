@@ -50,9 +50,6 @@ class DepthImageCreator(object):
 
 	def process_image(self,msg):
 		self.image_list_lock.acquire()
-		if self.last_image_timestamp and msg.header.stamp < self.last_image_timestamp:
-			# handle backward jumps in time (shoudl only happen when playing back a bag)
-			self.tf.clear()
 		np_arr = np.fromstring(msg.data, np.uint8)
 		self.last_image_timestamp = msg.header.stamp
 		self.image = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
