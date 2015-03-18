@@ -107,12 +107,13 @@ while True:
                 print e
                 # assume we had a bogus message
                 all_data = ""
+                print "ERROR!!!!!"
         except socket.error, msg:
             sys.stderr.write('ERROR: %s\n' % msg)
             #probably got disconnected
             all_data = ''
-            tango_clock_valid = False
-            tango_clock_offset = -1.0
             print "DISCONNECTED"
             break
+    tango_clock_valid = False
+    tango_clock_offset = -1.0
     client.close()
