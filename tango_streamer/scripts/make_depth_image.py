@@ -71,8 +71,8 @@ class DepthImageCreator(object):
 		for im_stamp,image in self.image_list:
 			diff_list.append((abs((im_stamp-timestamp).to_sec()),image))
 		closest_temporally = min(diff_list,key=lambda t: t[0])
-		self.image_list_lock.release()
 		print closest_temporally[0]
+		self.image_list_lock.release()
 		return closest_temporally[1]
 
 	def handle_combined_click(self,event,x,y,flags,param):
