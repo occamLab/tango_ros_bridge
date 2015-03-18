@@ -78,7 +78,12 @@ public class HelloTangoActivity extends Activity {
   
   private Socket kkSocketIntrinsics;
   private PrintWriter outIntrinsics;
-  
+
+  private Thread imagesThread;
+  private Thread poseThread;
+  private Thread pointCloudThread;
+  private Thread intrinsicsThread;
+
   protected Bitmap bm; 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -202,7 +207,7 @@ public class HelloTangoActivity extends Activity {
           TangoJNINative.connect();
           mIsPermissionIntentCalled = true;
 
-          new Thread(new Runnable() {
+          intrinsicsThread = new Thread(new Runnable() {
               public void run() { 
             	  while (true) {
             		  double[] currIntrinsics = TangoJNINative.returnIntrinsics();
@@ -219,12 +224,13 @@ public class HelloTangoActivity extends Activity {
             		  }
 	              }
               }
-          }).start();
+          });
           
-          new Thread(new Runnable() {
+          pointCloudThread = new Thread(new Runnable() {
               public void run() { 
             	  while (true) {
             		  float[] currPointCloud = TangoJNINative.returnPointCloud();
+            		  imagesThread.interrupt();
             		  if (connected) {
             			  outPointCloud.println("POINTCLOUDSTARTINGRIGHTNOW");
             			  String pcAsString = Arrays.toString(currPointCloud);
@@ -238,9 +244,9 @@ public class HelloTangoActivity extends Activity {
             		  }
 	              }
               }
-          }).start();
+          });
          
-          new Thread(new Runnable() {
+          imagesThread = new Thread(new Runnable() {
               public void run() {
             	  while (true) {
             		  double frameTimeStamp = TangoJNINative.getFrameTimestamp();
@@ -271,14 +277,15 @@ public class HelloTangoActivity extends Activity {
                 	       }
             		  }
             		  try {
-            			  Thread.sleep(200);
+            			  // this is pretty damn fast... would be nice to have some flow control
+            			  Thread.sleep(30);
             		  } catch (InterruptedException ex) {
-            			  System.err.println("Something weird happened");
+            			 // System.err.println("Something weird happened");
             		  }
             	  } 
               }
-          }).start();
-          new Thread(new Runnable() {
+          });
+          poseThread = new Thread(new Runnable() {
               public void run() {
             	  while (true) {
             		  double[] currPose = TangoJNINative.returnPoseArray();
@@ -301,7 +308,12 @@ public class HelloTangoActivity extends Activity {
             		  }
             	  }
               }
-          }).start();
+          });
+          
+          poseThread.start();
+          pointCloudThread.start();
+          intrinsicsThread.start();
+          imagesThread.start();
         }
     }
   }
