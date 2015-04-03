@@ -10,7 +10,8 @@ from tf import TransformListener
 from threading import Lock
 
 class DepthImageCreator(object):
-	def __init__(self):
+	def __init__(self, use_depth_only):
+		self.use_depth_only = use_depth_only
 		self.depth_image_lock = Lock()
 		self.image_list_lock = Lock()
 		self.image_list = []
@@ -168,7 +169,7 @@ class DepthImageCreator(object):
 			if self.image != None:
 				cv2.imshow("image_feed", cv2.resize(self.image,(self.image.shape[1]/self.downsample_factor,
 															self.image.shape[0]/self.downsample_factor)))
-			if self.image != None and self.depth_image != None:
+			if not(self.use_depth_only) and self.image != None and self.depth_image != None:
 				kernel = np.ones((3,3),'uint8')
 				self.depth_image_lock.acquire()
 				nearest_image = self.get_nearest_image_temporally(self.depth_image_timestamp)
@@ -179,9 +180,20 @@ class DepthImageCreator(object):
 
 				self.depth_image_lock.release()
 
+			if self.depth_image != None and self.use_depth_only:
+				kernel = np.ones((5,5),'uint8')
+				self.depth_image_lock.acquire()
+				ret, depth_threshed = cv2.threshold(self.depth_image,1,255,cv2.THRESH_BINARY)
+				combined_img = (cv2.dilate(depth_threshed,kernel)).astype(dtype=np.uint8)
+				cv2.imshow("combined_feed", cv2.resize(combined_img,(self.image.shape[1]/self.downsample_factor,
+													   self.image.shape[0]/self.downsample_factor)))
+
+				self.depth_image_lock.release()
+
 			r.sleep()
 
 if __name__ == '__main__':
 	rospy.init_node('make_depth_image')
-	node = DepthImageCreator()
+	use_depth_only = rospy.get_param('/use_depth_only',False)
+	node = DepthImageCreator(use_depth_only)
 	node.run()
