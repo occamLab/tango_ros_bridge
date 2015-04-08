@@ -5,6 +5,8 @@ A simple echo server
 """
 
 import socket
+import zlib
+import array
 import rospy
 import time
 from std_msgs.msg import Float64
@@ -52,11 +54,12 @@ while True:
 					start = all_data.find(begin_point_cloud_marker)
 					t = time.time()
 					point_cloud = all_data[start+len(begin_point_cloud_marker):index]
-					point_cloud_vals = point_cloud.split(',')
+					print len(point_cloud)
+					point_cloud_vals = array.array('f')
+					point_cloud_vals.fromstring(point_cloud[0:-1])
+					point_cloud_vals.byteswap()
 					timestamp = point_cloud_vals[0]
-					print timestamp
 					point_cloud_vals = point_cloud_vals[1:]
-					print len(point_cloud_vals)
 					if len(point_cloud_vals)>1:
 						point_cloud_vals = [float(p) for p in point_cloud_vals]
 						msg = PointCloud()
@@ -64,9 +67,6 @@ while True:
 						msg.header.frame_id = 'depth_camera'
 
 						for i in range(0,len(point_cloud_vals),3):
-							# msg.points.append(Point32(x=point_cloud_vals[i],
-							# 						  y=point_cloud_vals[i+1],
-							# 						  z=point_cloud_vals[i+2]))
 							msg.points.append(Point32(y=point_cloud_vals[i],
 					    							  z=point_cloud_vals[i+1],
 					    							  x=point_cloud_vals[i+2]))
@@ -75,8 +75,9 @@ while True:
 					print "timestamp", timestamp
 					print "num vals ", len(point_cloud_vals)/3
 					print "bytes in pc message ", len(point_cloud)
-			except:
+			except Exception as inst:
 				# assume we had a bogus message
+				print "BAD BAD BAD", inst
 				all_data = ""
 		except socket.error, msg:
 			sys.stderr.write('ERROR: %s\n' % msg)
