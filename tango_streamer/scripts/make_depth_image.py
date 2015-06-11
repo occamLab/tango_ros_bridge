@@ -18,7 +18,7 @@ class DepthImageCreator(object):
 		self.image_list_max_size = 100
 		self.downsample_factor = 2
 		self.tf = TransformListener()
-		rospy.Subscriber("/camera_info",
+		rospy.Subscriber("/color_camera/camera_info",
 						 CameraInfo,
 						 self.process_camera_info,
 						 queue_size=10)
@@ -26,7 +26,7 @@ class DepthImageCreator(object):
 						 PointCloud,
 						 self.process_point_cloud,
 						 queue_size=10)
-		rospy.Subscriber("/camera/image_raw/compressed",
+		rospy.Subscriber("/color_camera/image_raw/compressed",
 						 CompressedImage,
 						 self.process_image,
 						 queue_size=10)
@@ -185,8 +185,8 @@ class DepthImageCreator(object):
 				self.depth_image_lock.acquire()
 				ret, depth_threshed = cv2.threshold(self.depth_image,1,255,cv2.THRESH_BINARY)
 				combined_img = (cv2.dilate(depth_threshed,kernel)).astype(dtype=np.uint8)
-				cv2.imshow("combined_feed", cv2.resize(combined_img,(self.image.shape[1]/self.downsample_factor,
-													   self.image.shape[0]/self.downsample_factor)))
+				cv2.imshow("combined_feed", cv2.resize(combined_img,(combined_img.shape[1]/self.downsample_factor,
+													   combined_img.shape[0]/self.downsample_factor)))
 
 				self.depth_image_lock.release()
 
