@@ -18,7 +18,7 @@ class DepthImageCreator(object):
 		self.image_list_max_size = 100
 		self.downsample_factor = 2
 		self.tf = TransformListener()
-		rospy.Subscriber("/color_camera/camera_info",
+		rospy.Subscriber("/camera_info",
 						 CameraInfo,
 						 self.process_camera_info,
 						 queue_size=10)
@@ -26,11 +26,14 @@ class DepthImageCreator(object):
 						 PointCloud,
 						 self.process_point_cloud,
 						 queue_size=10)
-		rospy.Subscriber("/color_camera/image_raw/compressed",
+		rospy.Subscriber("/camera/image_raw/compressed",
 						 CompressedImage,
 						 self.process_image,
 						 queue_size=10)
 		self.clicked_point_pub = rospy.Publisher("/clicked_point",PointStamped,queue_size=10)
+		self.planar_point_pub = rospy.Publisher("/second_nearest_point", PointStamped, queue_size=10)
+		self.planar_point_2_pub = rospy.Publisher("/third_nearest_point", PointStamped, queue_size=10) #nts: have listener do sth like [pt1,pt2], then list[0] = list[1]; list[1] = rostopic input? Or is that not better?
+		self.nearby_point_cloud_pub = rospy.Publisher("/nearby_cloud", PointCloud, queue_size=10)
 		self.camera_info = None
 		self.P = None
 		self.depth_image = None
@@ -41,8 +44,10 @@ class DepthImageCreator(object):
 		cv2.namedWindow("depth_feed")
 		cv2.namedWindow("image_feed")
 		cv2.namedWindow("combined_feed")
+		cv2.namedWindow("coplanar_freeze")
 		cv2.setMouseCallback('image_feed',self.handle_click)
 		cv2.setMouseCallback('combined_feed',self.handle_combined_click)
+
 
 	def handle_click(self,event,x,y,flags,param):
 		if event == cv2.EVENT_LBUTTONDOWN:
@@ -85,20 +90,41 @@ class DepthImageCreator(object):
 				for i in range(self.projected_points.shape[0]):
 					dist = (self.projected_points[i,0,0] - click_coords[0])**2 + (self.projected_points[i,0,1] - click_coords[1])**2
 					distances.append(dist)
-				three_d_coord = self.points_3d[:,np.argmin(distances)]
-
+				by_distances = np.argsort(distances)
+				three_d_coord = self.points_3d[:,by_distances[0]]
+				# next_nearest_coord = self.points_3d[:, by_distances[1]]
+				# third_nearest_coord = self.points_3d[:, by_distances[2]]
 				# again, we have to reshuffle the coordinates due to differences in ROS Tango coordinate systems
 				point_msg = PointStamped(header=Header(stamp=self.depth_image_timestamp,
 													   frame_id="depth_camera"),
 										 point=Point(y=three_d_coord[0],
 												 	 z=three_d_coord[1],
 												 	 x=three_d_coord[2]))
+				# pm2 = PointStamped(header=Header(stamp=self.depth_image_timestamp,
+													   # frame_id="depth_camera"),
+										 # point=Point(y=next_nearest_coord[0],
+												 	 # z=next_nearest_coord[1],
+												 	 # x=next_nearest_coord[2]))
+				# pm3 = PointStamped(header=Header(stamp=self.depth_image_timestamp,
+													   # frame_id="depth_camera"),
+										 # point=Point(y=third_nearest_coord[0],
+												 	 # z=third_nearest_coord[1],
+												 	 # x=third_nearest_coord[2]))
+				nearby_cloud = PointCloud()
+				for i in range(16):
+					nearby_cloud.points.append(self.points_3d[:, by_distances[i]])
+				self.nearby_point_cloud_pub.publish(nearby_cloud)
+				
 				self.tf.waitForTransform("depth_camera",
 										 "odom",
 										 self.depth_image_timestamp,
 										 rospy.Duration(1.0))
 				transformed_coord = self.tf.transformPoint('odom', point_msg)
+				# tc2 = self.tf.transformPoint('odom', pm2)
+				# tc3 = self.tf.transformPoint('odom', pm3)
 				self.clicked_point_pub.publish(transformed_coord)
+				# self.planar_point_pub.publish(tc2)
+				# self.planar_point_2_pub.publish(tc3)
 				self.depth_image_lock.release()
 			except Exception as ex:
 				print "Encountered an errror! ", ex
@@ -185,8 +211,8 @@ class DepthImageCreator(object):
 				self.depth_image_lock.acquire()
 				ret, depth_threshed = cv2.threshold(self.depth_image,1,255,cv2.THRESH_BINARY)
 				combined_img = (cv2.dilate(depth_threshed,kernel)).astype(dtype=np.uint8)
-				cv2.imshow("combined_feed", cv2.resize(combined_img,(combined_img.shape[1]/self.downsample_factor,
-													   combined_img.shape[0]/self.downsample_factor)))
+				cv2.imshow("combined_feed", cv2.resize(combined_img,(self.image.shape[1]/self.downsample_factor,
+													   self.image.shape[0]/self.downsample_factor)))
 
 				self.depth_image_lock.release()
 

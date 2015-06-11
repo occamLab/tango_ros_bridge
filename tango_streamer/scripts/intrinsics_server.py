@@ -18,12 +18,14 @@ import tf
 # new data is available
 # need to better compress point clouds
 
-pub_camera_info = rospy.Publisher('/camera_info', CameraInfo, queue_size=10)
 
 rospy.init_node("intrinsics_server")
+camera_name = rospy.get_param('~camera_name')
+
+pub_camera_info = rospy.Publisher('/' + camera_name + '/camera_info', CameraInfo, queue_size=10)
 
 host = ''
-port = 11114
+port = rospy.get_param('~port_number')
 backlog = 5
 size = 1024
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

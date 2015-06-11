@@ -22,13 +22,15 @@ def handle_tango_clock(msg):
 	tango_clock_offset = msg.data
 	print "Got new offset", tango_clock_offset
 
-clock_sub = rospy.Subscriber('/tango_clock', Float64, handle_tango_clock)
-pub_camera = rospy.Publisher('/camera/image_raw/compressed', CompressedImage, queue_size=10)
-
-rospy.init_node("image_server")
+rospy.init_node("image_server") 
 
 host = ''
-port = 11111
+port = rospy.get_param('~port_number')
+camera_name = rospy.get_param('~camera_name')
+
+clock_sub = rospy.Subscriber('/tango_clock', Float64, handle_tango_clock)
+pub_camera = rospy.Publisher('/' + camera_name + '/image_raw/compressed', CompressedImage, queue_size=10)
+
 backlog = 5
 size = 10**6
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
