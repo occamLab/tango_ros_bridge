@@ -75,6 +75,7 @@ while True:
 					print len(jpg)
 					msg = CompressedImage()
 					msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
+					msg.header.frame_id = 'camera'
 					msg.data = jpg
 					msg.format = 'jpeg'
 					pub_camera.publish(msg)
