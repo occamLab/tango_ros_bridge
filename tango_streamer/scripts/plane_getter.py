@@ -2,7 +2,7 @@
 
 import rospy
 import numpy as np
-from geometry_msgs.msg import PointStamped, Point, Pose
+from geometry_msgs.msg import PointStamped, Point, Pose, Point32
 from sensor_msgs.msg import CameraInfo, PointCloud, CompressedImage
 import cv2
 from std_msgs.msg import Header
@@ -18,7 +18,7 @@ class DepthImageCreator(object):
 		self.image_list_max_size = 100
 		self.downsample_factor = 2
 		self.tf = TransformListener()
-		rospy.Subscriber("/camera_info",
+		rospy.Subscriber("/color_camera/camera_info",
 						 CameraInfo,
 						 self.process_camera_info,
 						 queue_size=10)
@@ -26,7 +26,7 @@ class DepthImageCreator(object):
 						 PointCloud,
 						 self.process_point_cloud,
 						 queue_size=10)
-		rospy.Subscriber("/camera/image_raw/compressed",
+		rospy.Subscriber("/color_camera/image_raw/compressed",
 						 CompressedImage,
 						 self.process_image,
 						 queue_size=10)
@@ -111,8 +111,12 @@ class DepthImageCreator(object):
 												 	 # z=third_nearest_coord[1],
 												 	 # x=third_nearest_coord[2]))
 				nearby_cloud = PointCloud()
-				for i in range(16):
-					nearby_cloud.points.append(self.points_3d[:, by_distances[i]])
+				# nearby_cloud.header.stamp = rospy.Time(tango_clock_offset+float(timestamp))
+				nearby_cloud.header.frame_id = 'depth_camera'
+
+				for i in range(11):
+					point_to_add = Point32(y=self.points_3d[:, by_distances[i]][0], z=self.points_3d[:, by_distances[i]][1], x=self.points_3d[:, by_distances[i]][2])
+					nearby_cloud.points.append(point_to_add)
 				self.nearby_point_cloud_pub.publish(nearby_cloud)
 				
 				self.tf.waitForTransform("depth_camera",
