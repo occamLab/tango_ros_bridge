@@ -31,8 +31,6 @@ class DepthImageCreator(object):
 						 self.process_image,
 						 queue_size=10)
 		self.clicked_point_pub = rospy.Publisher("/clicked_point",PointStamped,queue_size=10)
-		self.planar_point_pub = rospy.Publisher("/second_nearest_point", PointStamped, queue_size=10)
-		self.planar_point_2_pub = rospy.Publisher("/third_nearest_point", PointStamped, queue_size=10) #nts: have listener do sth like [pt1,pt2], then list[0] = list[1]; list[1] = rostopic input? Or is that not better?
 		self.nearby_point_cloud_pub = rospy.Publisher("/nearby_cloud", PointCloud, queue_size=10)
 		self.camera_info = None
 		self.P = None
@@ -92,26 +90,12 @@ class DepthImageCreator(object):
 					distances.append(dist)
 				by_distances = np.argsort(distances)
 				three_d_coord = self.points_3d[:,by_distances[0]]
-				# next_nearest_coord = self.points_3d[:, by_distances[1]]
-				# third_nearest_coord = self.points_3d[:, by_distances[2]]
-				# again, we have to reshuffle the coordinates due to differences in ROS Tango coordinate systems
 				point_msg = PointStamped(header=Header(stamp=self.depth_image_timestamp,
 													   frame_id="depth_camera"),
 										 point=Point(y=three_d_coord[0],
 												 	 z=three_d_coord[1],
 												 	 x=three_d_coord[2]))
-				# pm2 = PointStamped(header=Header(stamp=self.depth_image_timestamp,
-													   # frame_id="depth_camera"),
-										 # point=Point(y=next_nearest_coord[0],
-												 	 # z=next_nearest_coord[1],
-												 	 # x=next_nearest_coord[2]))
-				# pm3 = PointStamped(header=Header(stamp=self.depth_image_timestamp,
-													   # frame_id="depth_camera"),
-										 # point=Point(y=third_nearest_coord[0],
-												 	 # z=third_nearest_coord[1],
-												 	 # x=third_nearest_coord[2]))
 				nearby_cloud = PointCloud()
-				# nearby_cloud.header.stamp = rospy.Time(tango_clock_offset+float(timestamp))
 				nearby_cloud.header.frame_id = 'depth_camera'
 
 				for i in range(11):
