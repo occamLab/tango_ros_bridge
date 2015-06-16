@@ -1,0 +1,9 @@
+<launch>
+<arg name="host" default="192.168.17.209"/>
+<arg name="bagfile"/>
+<include file="$(find tango_streamer)/launch/stream.launch"/>
+<include file="$(find gscam)/examples/eye_helper_side_cam.launch">
+	<arg name="host" value="$(arg host)"/>
+</include>
+<node pkg="rosbag" type="record" name="recorder" args='-a -x ".*/image_raw$|.*compressedDepth.*" -O $(arg bagfile)' output="screen"/>
+</launch>
