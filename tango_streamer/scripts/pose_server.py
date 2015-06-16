@@ -61,13 +61,13 @@ while True:
                     if not(tango_clock_valid):
                         tango_clock_offset = ROS_timestamp.to_time() - float(tango_timestamp)
                         tango_clock_valid = True
-
+                    
                     # publish the offset so other servers can find out about it
                     pub_clock.publish(tango_clock_offset)
 
                     msg = PoseStamped()
                     # might need to revisit time stamps
-                    msg.header.stamp = rospy.Time.now()
+                    msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
                     msg.header.frame_id = 'odom'
 
                     msg.pose.position.x = float(pose_vals[0])
@@ -99,7 +99,7 @@ while True:
                                      quaternion_from_euler(euler_angles_depth_camera[0],
                                                            euler_angles_depth_camera[1],
                                                            euler_angles_depth_camera[2]),
-                                     rospy.Time.now(),
+                                     rospy.Time(tango_clock_offset + float(tango_timestamp)),
                                      "device",          # this should be something different like "device"
                                      "odom")
                     all_data = all_data[index+len(end_pose_marker):]
