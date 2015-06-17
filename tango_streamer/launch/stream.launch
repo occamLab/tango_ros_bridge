@@ -3,12 +3,12 @@
    <param name="port_number" value="11111" type="int"/>
    <param name="camera_name" value="color_camera"/>
 </node>
-<node pkg="tango_streamer" type="image_server.py" name="image_server_fisheye" output="screen">
+<node pkg="tango_streamer" type="image_server.py" name="image_server_fisheye">
    <param name="port_number" value="11115" type="int"/>
    <param name="camera_name" value="fisheye_camera"/>
 </node>
 
-<node pkg="tango_streamer" type="pose_server.py" name="pose_server"/>
+<node pkg="tango_streamer" type="pose_server.py" name="pose_server" output="screen"/>
 
 <node pkg="tango_streamer" type="intrinsics_server.py" name="intrinsics_server_color">
    <param name="port_number" value="11114" type="int"/>
@@ -22,4 +22,8 @@
 
 <node pkg="tango_streamer" type="pointcloud_server.py" name="pointcloud_server"/>
 <node pkg="tf" type="static_transform_publisher" name="device_to_depth_cam" args="0 0 0 0 0.24 0 device depth_camera 10"/>
+<node pkg="tf" type="static_transform_publisher" name="fisheye_to_depth_cam" args="0 -0.05 0 0 0 0 depth_camera fisheye_camera 10"/>
+
+<node pkg="image_transport" type="republish" name="decompress_fisheye" args="in:=fisheye_camera/image_raw compressed out:=fisheye_camera/image_raw raw"/>
+
 </launch>

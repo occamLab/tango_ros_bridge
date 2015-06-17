@@ -20,7 +20,6 @@ tango_clock_offset = 0
 def handle_tango_clock(msg):
 	global tango_clock_offset
 	tango_clock_offset = msg.data
-	print "Got new offset", tango_clock_offset
 
 rospy.init_node("image_server") 
 
@@ -54,12 +53,10 @@ while True:
 			if not data:
 				break
 			all_data += data
-			print len(all_data)
 
 			index = all_data.find(end_frame_marker)
 			try:
 				if index != -1:
-					print "FOUND END FRAME"
 					start = all_data.find(begin_frame_marker)
 					jpg = all_data[start+len(begin_frame_marker):index]
 
@@ -68,7 +65,6 @@ while True:
 						if index != -1:
 							start_ts = jpg.find(begin_timestamp_marker)
 							timestamp = jpg[start_ts+len(begin_timestamp_marker):index_ts]
-							print float(timestamp)
 							jpg = jpg[index_ts+len(end_timestamp_marker):]
 					except:
 						# assume we had a bogus message
@@ -77,7 +73,8 @@ while True:
 					print len(jpg)
 					msg = CompressedImage()
 					msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
-					msg.header.frame_id = 'camera'
+					print "overall offset", msg.header.stamp - rospy.Time.now()
+					msg.header.frame_id = camera_name
 					msg.data = jpg
 					msg.format = 'jpeg'
 					pub_camera.publish(msg)

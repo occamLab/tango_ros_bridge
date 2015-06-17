@@ -8,12 +8,14 @@ import socket
 import rospy
 from sensor_msgs.msg import CompressedImage, PointCloud
 from geometry_msgs.msg import PoseStamped, Point32
-from std_msgs.msg import Float64, Float64MultiArray
+from std_msgs.msg import Float64, Float64MultiArray, String, Int32
 import sys
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from math import pi
 import tf
 
+pub_feature_track_status = rospy.Publisher('/tango_feature_tracking_status', Int32, queue_size=10)
+pub_pose_status = rospy.Publisher('/tango_pose_status', String, queue_size=10)
 pub_pose = rospy.Publisher('/tango_pose', PoseStamped, queue_size=10)
 pub_angles = rospy.Publisher('/tango_angles', Float64MultiArray, queue_size=10)
 pub_clock = rospy.Publisher('/tango_clock', Float64, queue_size=10)
@@ -53,9 +55,18 @@ while True:
                     start = all_data.find(begin_pose_marker)
                     pose = all_data[start+len(begin_pose_marker):index]
                     pose_vals = pose.split(",")
-                    print pose_vals
-                    tango_timestamp = pose_vals[-1]
-                    pose_vals = pose_vals[0:-1]
+                    tango_timestamp = pose_vals[-3]
+                    tango_status_code = pose_vals[-2]
+                    features_tracked = int(float(pose_vals[-1]))
+                    print features_tracked
+                    if features_tracked != -1:
+                        pub_feature_track_status.publish(Int32(features_tracked))
+                    print tango_status_code
+                    sc = int(float(tango_status_code))
+                    status_code_to_msg = ['TANGO_POSE_INITIALIZING','TANGO_POSE_VALID','TANGO_POSE_INVALID','TANGO_POSE_UNKNOWN']
+                    pub_pose_status.publish(String(status_code_to_msg[sc]))
+                    print "published successfully!"
+                    pose_vals = pose_vals[0:-3]
 
                     ROS_timestamp = rospy.Time.now()
                     if not(tango_clock_valid):
