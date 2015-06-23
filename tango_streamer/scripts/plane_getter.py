@@ -96,20 +96,21 @@ class DepthImageCreator(object):
 												 	 z=three_d_coord[1],
 												 	 x=three_d_coord[2]))
 				nearby_cloud = PointCloud()
-				nearby_cloud.header.frame_id = 'depth_camera'
-
-				for i in range(11):
-					point_to_add = Point32(y=self.points_3d[:, by_distances[i]][0], z=self.points_3d[:, by_distances[i]][1], x=self.points_3d[:, by_distances[i]][2])
-					nearby_cloud.points.append(point_to_add)
-				self.nearby_point_cloud_pub.publish(nearby_cloud)
-				
+				nearby_cloud.header.frame_id = 'odom'
 				self.tf.waitForTransform("depth_camera",
 										 "odom",
 										 self.depth_image_timestamp,
 										 rospy.Duration(1.0))
+				for i in range(11):
+					untransformed_point = PointStamped(header=Header(stamp=self.depth_image_timestamp, frame_id="depth_camera"),point=Point(y=self.points_3d[:, by_distances[i]][0], z=self.points_3d[:, by_distances[i]][1], x=self.points_3d[:, by_distances[i]][2]))
+					transformed_point = self.tf.transformPoint('odom', untransformed_point)
+					point_to_add = Point32(x = transformed_point.point.x, y =  transformed_point.point.y, z = transformed_point.point.z)
+					nearby_cloud.points.append(point_to_add)
+					# point_to_add = Point32(y=self.points_3d[:, by_distances[i]][0], z=self.points_3d[:, by_distances[i]][1], x=self.points_3d[:, by_distances[i]][2])
+					# nearby_cloud.points.append(point_to_add)
+				self.nearby_point_cloud_pub.publish(nearby_cloud)
+				
 				transformed_coord = self.tf.transformPoint('odom', point_msg)
-				# tc2 = self.tf.transformPoint('odom', pm2)
-				# tc3 = self.tf.transformPoint('odom', pm3)
 				self.clicked_point_pub.publish(transformed_coord)
 				# self.planar_point_pub.publish(tc2)
 				# self.planar_point_2_pub.publish(tc3)
