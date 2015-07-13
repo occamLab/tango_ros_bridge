@@ -14,11 +14,6 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from math import pi
 import tf
 
-pub_feature_track_status = rospy.Publisher('/tango_feature_tracking_status', Int32, queue_size=10)
-pub_pose_status = rospy.Publisher('/tango_pose_status', String, queue_size=10)
-pub_pose = rospy.Publisher('/tango_pose', PoseStamped, queue_size=10)
-pub_angles = rospy.Publisher('/tango_angles', Float64MultiArray, queue_size=10)
-pub_clock = rospy.Publisher('/tango_clock', Float64, queue_size=10)
 
 """ Keeps track of whether we have a valid clock offset between
     ROS time and Tango time.  We don't care too much about
@@ -30,7 +25,10 @@ tango_clock_offset = -1.0
 rospy.init_node("pose_server")
 
 host = ''
-port = 11113
+port = rospy.get_param('~port_number')
+pose_topic = rospy.get_param('~pose_topic')
+coordinate_frame = rospy.get_param('~coordinate_frame')
+
 backlog = 5
 size = 1024
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -39,6 +37,13 @@ s.listen(backlog)
 all_data = ''
 begin_pose_marker = 'POSESTARTINGRIGHTNOW\n' 
 end_pose_marker = 'POSEENDINGRIGHTNOW\n'
+
+pub_feature_track_status = rospy.Publisher('/tango_feature_tracking_status', Int32, queue_size=10)
+pub_pose_status = rospy.Publisher('/tango_pose_status', String, queue_size=10)
+pub_pose = rospy.Publisher(pose_topic, PoseStamped, queue_size=10)
+pub_angles = rospy.Publisher('/tango_angles', Float64MultiArray, queue_size=10)
+pub_clock = None
+pub_clock = rospy.Publisher('/tango_clock', Float64, queue_size=10)
 
 br = tf.TransformBroadcaster()
 while True:
@@ -72,14 +77,13 @@ while True:
                     if not(tango_clock_valid):
                         tango_clock_offset = ROS_timestamp.to_time() - float(tango_timestamp)
                         tango_clock_valid = True
-                    
                     # publish the offset so other servers can find out about it
                     pub_clock.publish(tango_clock_offset)
 
                     msg = PoseStamped()
                     # might need to revisit time stamps
                     msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
-                    msg.header.frame_id = 'odom'
+                    msg.header.frame_id = coordinate_frame
 
                     msg.pose.position.x = float(pose_vals[0])
                     msg.pose.position.y = float(pose_vals[1])
@@ -112,7 +116,7 @@ while True:
                                                            euler_angles_depth_camera[2]),
                                      rospy.Time(tango_clock_offset + float(tango_timestamp)),
                                      "device",          # this should be something different like "device"
-                                     "odom")
+                                     coordinate_frame)
                     all_data = all_data[index+len(end_pose_marker):]
             except Exception as e:
                 print e

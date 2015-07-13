@@ -7,7 +7,9 @@ project(tango_streamer)
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
-)
+  image_transport
+  roscpp
+  camera_info_manager)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -103,6 +105,9 @@ include_directories(
 
 ## Declare a cpp executable
 # add_executable(tango_streamer_node src/tango_streamer_node.cpp)
+
+add_executable(camera_node src/camera_node.cpp)
+target_link_libraries(camera_node ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
