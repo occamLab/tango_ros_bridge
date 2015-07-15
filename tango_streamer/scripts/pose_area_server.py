@@ -45,21 +45,26 @@ class TransformHelpers:
 
 
 def fix_area_learning_to_odom_transform(area_learning_pose, odom_pose, tf_broadcaster , tf_listener):
-    """ Super tricky code to properly update map to odom transform... do not modify this... Difficulty level infinity. """
+    global transform_translation, transform_rotation
+    """ Update area_learning to odom transform. """
     try:
         tf_listener.waitForTransform("device","odom",odom_pose.header.stamp,rospy.Duration(1.0))
     except:
-        print "Unable to get transform!!"
         return
-    if abs((odom_pose.header.stamp - area_learning_pose.header.stamp).to_sec()) > 0.5:
-        return
-    (translation, rotation) = TransformHelpers.convert_pose_inverse_transform(area_learning_pose.pose)
 
-    #(translation, rotation) = TransformHelpers.convert_pose_inverse_transform(odom_pose.pose)
-    p = PoseStamped(pose=TransformHelpers.convert_translation_rotation_to_pose(translation,rotation),header=Header(stamp=odom_pose.header.stamp,frame_id="device"))
+    if (abs((odom_pose.header.stamp - area_learning_pose.header.stamp).to_sec()) > 0.5 or
+        (area_learning_pose.pose.position.x == 0 and area_learning_pose.pose.position.y == 0 and area_learning_pose.pose.position.z == 0) or
+        (odom_pose.pose.position.x == 0 and odom_pose.pose.position.y == 0 and odom_pose.pose.position.z == 0)):
+        if transform_translation != None and transform_rotation != None:
+            tf_broadcaster.sendTransform(transform_translation, transform_rotation, odom_pose.header.stamp, "odom", "area_learning")
+        return
+
+    (translation, rotation) = TransformHelpers.convert_pose_inverse_transform(area_learning_pose.pose)
+    p = PoseStamped(pose=TransformHelpers.convert_translation_rotation_to_pose(translation,rotation),
+                    header=Header(stamp=odom_pose.header.stamp,frame_id="device"))
     odom_to_area_learning = tf_listener.transformPose("odom", p)
-    (translation, rotation) = TransformHelpers.convert_pose_inverse_transform(odom_to_area_learning.pose)
-    tf_broadcaster.sendTransform(translation, rotation, odom_pose.header.stamp, "odom", "area_learning")
+    (transform_translation, transform_rotation) = TransformHelpers.convert_pose_inverse_transform(odom_to_area_learning.pose)
+    tf_broadcaster.sendTransform(transform_translation, transform_rotation, odom_pose.header.stamp, "odom", "area_learning")
 
 """ Keeps track of whether we have a valid clock offset between
     ROS time and Tango time.  We don't care too much about
@@ -89,6 +94,9 @@ host = ''
 port = rospy.get_param('~port_number')
 pose_topic = rospy.get_param('~pose_topic')
 coordinate_frame = rospy.get_param('~coordinate_frame')
+
+transform_translation = None
+transform_rotation = None
 
 backlog = 5
 size = 1024
