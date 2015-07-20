@@ -95,8 +95,8 @@ port = rospy.get_param('~port_number')
 pose_topic = rospy.get_param('~pose_topic')
 coordinate_frame = rospy.get_param('~coordinate_frame')
 
-transform_translation = None
-transform_rotation = None
+transform_translation = (0.0 ,0.0, 0.0)
+transform_rotation = (0.0 , 0.0 , 0.0, 1.0)
 
 backlog = 5
 size = 1024
