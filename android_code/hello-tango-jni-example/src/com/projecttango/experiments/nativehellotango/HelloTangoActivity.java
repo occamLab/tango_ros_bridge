@@ -22,8 +22,9 @@ package com.projecttango.experiments.nativehellotango;
 
 import java.io.BufferedReader;
 import java.nio.ByteBuffer;
-
+ 
 import android.graphics.Bitmap;
+
 import com.google.tango.hellotangojni.R;
 
 import android.app.Activity;
@@ -42,11 +43,15 @@ import android.os.Environment;
 import java.io.File;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+
 import android.content.SharedPreferences;
+
 import java.util.Arrays;
 
 /**
@@ -55,49 +60,75 @@ import java.util.Arrays;
 public class HelloTangoActivity extends Activity {
   public static final String EXTRA_KEY_PERMISSIONTYPE = "PERMISSIONTYPE";
   public static final String EXTRA_VALUE_MOTION_TRACKING = "MOTION_TRACKING_PERMISSION";
+  public static final String EXTRA_VALUE_ADF = "ADF_LOAD_SAVE_PERMISSION";
 
+  
   private SharedPreferences preferences;
   private SharedPreferences.Editor preferencesEditor;
   private boolean mIsPermissionIntentCalled = false;
-
+ 
   private boolean connected = false;
   private String hostName = ""; 
-  final int portNumberImages = 11111;
+  final int portNumberColorImages = 11111;
   final int portNumberPointCloud = 11112;
   final int portNumberPose = 11113;
-  final int portNumberIntrinsics = 11114;
+  final int portNumberIntrinsicsColor = 11114;
+  final int portNumberFisheyeImages = 11115;
+  final int portNumberIntrinsicsFisheye = 11116;
+  final int portNumberPoseArea = 11117;
   
-  private Socket kkSocketImages;
-  private PrintWriter outImages;
+  private Socket kkSocketFisheyeImages;
+  private PrintWriter outFisheyeImages;
+  
+  private Socket kkSocketColorImages;
+  private PrintWriter outColorImages;
   
   private Socket kkSocketPose;
   private PrintWriter outPose;
+
+  private Socket kkSocketPoseArea;
+  private PrintWriter outPoseArea;
   
   private Socket kkSocketPointCloud;
   private PrintWriter outPointCloud;
   
-  private Socket kkSocketIntrinsics;
-  private PrintWriter outIntrinsics;
+  private Socket kkSocketIntrinsicsColor;
+  private PrintWriter outIntrinsicsColor;
+  
+  private Socket kkSocketIntrinsicsFisheye;
+  private PrintWriter outIntrinsicsFisheye;
 
-  private Thread imagesThread;
-  private Thread poseThread;
+  private Thread imagesColorThread;
+  private Thread imagesFisheyeThread;
+  private Thread poseThread;  
+  private Thread poseAreaThread;
+
+  
   private Thread pointCloudThread;
-  private Thread intrinsicsThread;
+  private Thread intrinsicsColorThread;
+  private Thread intrinsicsFisheyeThread;
 
-  protected Bitmap bm; 
-  @Override
+  protected Bitmap bmColor;
+  protected Bitmap bmFisheye; 
+
+  @Override 
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
     setTitle(R.string.app_name);
-	bm = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888);
+    // Tango fish eye
+	bmFisheye = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888);
+	bmColor = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888);
+
+	// tango color camera
+	//bm = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888);
     ImageView image = (ImageView) findViewById(R.id.test_image);
-    image.setImageBitmap(bm);
+    image.setImageBitmap(bmColor);
     preferences = getSharedPreferences("myvals", 0);
     preferencesEditor = preferences.edit();
 	EditText mEdit   = (EditText)findViewById(R.id.editText1);
 	mEdit.setText(preferences.getString("ROS_HOST",""));
-  }
+  } 
   
   public void toggleConnectionStatus(View v) {
 	  if (!connected) {
@@ -105,29 +136,41 @@ public class HelloTangoActivity extends Activity {
 		  hostName = mEdit.getText().toString();
 		  System.out.println("button clicked!! " + mEdit.getText().toString());
 		  preferencesEditor.putString("ROS_HOST",hostName);
-		  preferencesEditor.commit();
+		  preferencesEditor.commit(); 
 		  new AsyncTask<Void, Integer, Void>(){
-			  @Override
+			  @Override 
 			  protected Void doInBackground(Void... arg0) {
-				  try  {
-					  kkSocketImages = new Socket(hostName, portNumberImages);
-					  outImages = new PrintWriter(kkSocketImages.getOutputStream(), true);
-	    	        
+				  try  { 
+					  kkSocketColorImages = new Socket(hostName, portNumberColorImages);
+					  outColorImages = new PrintWriter(kkSocketColorImages.getOutputStream(), true);
+					  
+					  kkSocketFisheyeImages = new Socket(hostName, portNumberFisheyeImages);
+					  System.out.println("CREATED SOCKET!");
+					  outFisheyeImages = new PrintWriter(kkSocketFisheyeImages.getOutputStream(), true);
+					  
 					  kkSocketPointCloud = new Socket(hostName, portNumberPointCloud);
 					  outPointCloud = new PrintWriter(kkSocketPointCloud.getOutputStream(), true);
-	    	        
+	    	       
 					  kkSocketPose = new Socket(hostName, portNumberPose);
 					  outPose = new PrintWriter(kkSocketPose.getOutputStream(), true);
+					  /*
+					  kkSocketPoseArea = new Socket(hostName, portNumberPoseArea);
+					  outPoseArea = new PrintWriter(kkSocketPoseArea.getOutputStream(), true);
+					  */
+					  kkSocketIntrinsicsColor = new Socket(hostName, portNumberIntrinsicsColor);
+					  outIntrinsicsColor = new PrintWriter(kkSocketIntrinsicsColor.getOutputStream(), true);
 					  
-					  kkSocketIntrinsics = new Socket(hostName, portNumberIntrinsics);
-					  outIntrinsics = new PrintWriter(kkSocketIntrinsics.getOutputStream(), true);
+					  kkSocketIntrinsicsFisheye = new Socket(hostName, portNumberIntrinsicsFisheye);
+					  outIntrinsicsFisheye = new PrintWriter(kkSocketIntrinsicsFisheye.getOutputStream(), true);
 
 					  connected = true;
+					  System.out.println("MYDEBUG: CONNECTED!");
 				  } catch (Exception ex) {
+					  System.out.println("MYDEBUG: " + ex);
 					  ex.printStackTrace();
 				  }
 				  return null;
-			  }
+			  } 
 
 			  @Override         
 			  protected void onPostExecute(Void result) { 
@@ -146,10 +189,13 @@ public class HelloTangoActivity extends Activity {
 			  @Override
 			  protected Void doInBackground(Void... arg0) {
 				  try {
-					  kkSocketImages.close();
+					  kkSocketColorImages.close();
+					  kkSocketFisheyeImages.close();
 					  kkSocketPose.close();
+					 // kkSocketPoseArea.close();
 					  kkSocketPointCloud.close();
-					  kkSocketIntrinsics.close();
+					  kkSocketIntrinsicsColor.close();
+					  kkSocketIntrinsicsFisheye.close();
 					  connected = false;
 					  System.out.println("CLOSINGDOWN!!!");
 				  } catch (Exception ex) {
@@ -174,12 +220,18 @@ public class HelloTangoActivity extends Activity {
   
   @Override
   protected void onResume() {
-    super.onResume();
+    super.onResume(); 
     if (!mIsPermissionIntentCalled) {
       Intent intent = new Intent();
       intent.setAction("android.intent.action.REQUEST_TANGO_PERMISSION");
       intent.putExtra(EXTRA_KEY_PERMISSIONTYPE, EXTRA_VALUE_MOTION_TRACKING);
       startActivityForResult(intent, 0);
+
+      // Invoke intent to give permission to use Area Description/Learning features.
+      intent = new Intent();
+      intent.setAction("android.intent.action.REQUEST_TANGO_PERMISSION");
+      intent.putExtra(EXTRA_KEY_PERMISSIONTYPE, EXTRA_VALUE_ADF);
+      startActivityForResult(intent, 1);
     }
   }
 
@@ -189,12 +241,12 @@ public class HelloTangoActivity extends Activity {
     // TODO: this behavior doesn't work properly (App will always crash on pause)
     TangoJNINative.disconnect();
     mIsPermissionIntentCalled = false;
-  }
-   
-  @Override
+  } 
+
+  @Override 
   protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-    // Check which request we're responding to. 
-    if (requestCode == 0) {
+    // Check which request we're responding to.
+    if (requestCode == 1) {
         // Make sure the request was successful.
         if (resultCode == RESULT_CANCELED) {
           Toast.makeText(this, 
@@ -202,40 +254,20 @@ public class HelloTangoActivity extends Activity {
           finish();
         } else {
           TangoJNINative.initialize(this);
-          TangoJNINative.connectCallbacks();
           TangoJNINative.setupConfig();
+          TangoJNINative.connectCallbacks();
           TangoJNINative.connect();
           mIsPermissionIntentCalled = true;
-
-          intrinsicsThread = new Thread(new Runnable() {
-              public void run() { 
+ 
+          intrinsicsFisheyeThread = new Thread(new Runnable() {
+              public void run() {
             	  while (true) {
-            		  double[] currIntrinsics = TangoJNINative.returnIntrinsics();
+            		  double[] currIntrinsics = TangoJNINative.returnIntrinsicsFisheye();
             		  if (connected) {
-            			  outIntrinsics.println("INTRINSICSSTARTINGRIGHTNOW");
+            			  outIntrinsicsFisheye.println("INTRINSICSSTARTINGRIGHTNOW");
             			  String intrinsicsAsString = Arrays.toString(currIntrinsics);
-            			  outIntrinsics.println(intrinsicsAsString.substring(1,intrinsicsAsString.length() - 1));
-	                	  outIntrinsics.println("INTRINSICSENDINGRIGHTNOW");
-	            	  }
-            		  try {
-            			  Thread.sleep(1000);
-            		  } catch (InterruptedException ex) {
-            			  System.err.println("Something weird happened");
-            		  }
-	              }
-              }
-          });
-          
-          pointCloudThread = new Thread(new Runnable() {
-              public void run() { 
-            	  while (true) {
-            		  float[] currPointCloud = TangoJNINative.returnPointCloud();
-            		  imagesThread.interrupt();
-            		  if (connected) {
-            			  outPointCloud.println("POINTCLOUDSTARTINGRIGHTNOW");
-            			  String pcAsString = Arrays.toString(currPointCloud);
-            			  outPointCloud.println(pcAsString.substring(1,pcAsString.length() - 1));
-	                	  outPointCloud.println("POINTCLOUDENDINGRIGHTNOW");
+            			  outIntrinsicsFisheye.println(intrinsicsAsString.substring(1,intrinsicsAsString.length() - 1));
+	                	  outIntrinsicsFisheye.println("INTRINSICSENDINGRIGHTNOW");
 	            	  }
             		  try {
             			  Thread.sleep(1000);
@@ -246,30 +278,119 @@ public class HelloTangoActivity extends Activity {
               }
           });
          
-          imagesThread = new Thread(new Runnable() {
+          intrinsicsColorThread = new Thread(new Runnable() {
               public void run() {
             	  while (true) {
-            		  double frameTimeStamp = TangoJNINative.getFrameTimestamp();
-            		  byte[] myArray = TangoJNINative.returnArray();
-            		  System.out.println(myArray.length);
+            		  double[] currIntrinsics = TangoJNINative.returnIntrinsicsColor();
+            		  if (connected) {
+            			  outIntrinsicsColor.println("INTRINSICSSTARTINGRIGHTNOW");
+            			  String intrinsicsAsString = Arrays.toString(currIntrinsics);
+            			  outIntrinsicsColor.println(intrinsicsAsString.substring(1,intrinsicsAsString.length() - 1));
+	                	  outIntrinsicsColor.println("INTRINSICSENDINGRIGHTNOW");
+	            	  }
+            		  try {
+            			  Thread.sleep(1000);
+            		  } catch (InterruptedException ex) {
+            			  System.err.println("Something weird happened");
+            		  }
+	              }
+              }
+          });
+         
+          
+          pointCloudThread = new Thread(new Runnable() {
+              public void run() { 
+            	  while (true) {
+            		  float[] currPointCloud = TangoJNINative.returnPointCloud();
+            		  imagesColorThread.interrupt();
+            		  System.out.println("POINT CLOUD SIZE " + currPointCloud.length);
+            		  if (connected) {
+            			  outPointCloud.println("POINTCLOUDSTARTINGRIGHTNOW");
+            			  try {
+            				  DataOutputStream os = new DataOutputStream(kkSocketPointCloud.getOutputStream());
+            				  byte buf[] = new byte[4*currPointCloud.length];
+            				  for (int i=0; i<currPointCloud.length; ++i)
+            				  {
+            				      int val = Float.floatToRawIntBits(currPointCloud[i]);
+            				      buf[4 * i] = (byte) (val >> 24);
+            				      buf[4 * i + 1] = (byte) (val >> 16) ;
+            				      buf[4 * i + 2] = (byte) (val >> 8);
+            				      buf[4 * i + 3] = (byte) (val);
+            				  } 
+            				  os.write(buf);
+            			  } catch (Exception ex) { 
+            				  System.out.println("WEIRDNESS");
+            			  } 
+            			  System.out.println("pcAs WROTE TO SOCKET!");
+            			  outPointCloud.println();
+	                	  outPointCloud.println("POINTCLOUDENDINGRIGHTNOW");
+	            	  }
+            		  try {
+            			  Thread.sleep(1000);
+            		  } catch (InterruptedException ex) {
+            			  System.err.println("Something weird happened");
+            		  }
+	              } 
+              }
+          });
+        
+          imagesColorThread = new Thread(new Runnable() {
+              public void run() {
+            	  while (true) { 
+            		  double frameTimeStamp = TangoJNINative.getColorFrameTimestamp();
+            		  byte[] myArray = TangoJNINative.returnArrayColor();
             		  if (myArray != null && myArray.length != 0)  { 
-        				  bm.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
-        				  
-                	      runOnUiThread(new Runnable() {
-                	          @Override
-                	          public void run() {
-                	                ImageView image = (ImageView) findViewById(R.id.test_image);
-                	                image.invalidate(); 
-                	          }
-                	       });
+        				  bmColor.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
+
                 	       if (connected) {
 	                		   try {
-	                			   outImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
-	                			   outImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
-	                			   outImages.println(frameTimeStamp);
-	                			   outImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
-	                			   bm.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketImages.getOutputStream());
-	                			   outImages.println("DEPTHFRAMEENDINGRIGHTNOW");
+	                			   outColorImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
+	                			   outColorImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
+	                			   outColorImages.println(frameTimeStamp);
+	                			   outColorImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
+	                			   bmColor.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketColorImages.getOutputStream());
+	                			   outColorImages.println("DEPTHFRAMEENDINGRIGHTNOW");
+	                		   } catch (IOException ex) {
+	                			   ex.printStackTrace();
+	                			   System.err.println("ERROR!"); 
+	                		   }
+                	       }
+            		  }
+            	      runOnUiThread(new Runnable() {
+            	          @Override
+            	          public void run() {
+            	                ImageView image = (ImageView) findViewById(R.id.test_image);
+            	                image.invalidate(); 
+            	          }
+            	       });
+            		  try {
+            			  // this is pretty damn fast... would be nice to have some flow control
+            			  Thread.sleep(30);
+            		  } catch (InterruptedException ex) {
+            			 // System.err.println("Something weird happened");
+            		  }
+            	  } 
+              }
+          });
+           
+          imagesFisheyeThread = new Thread(new Runnable() {
+              public void run() {
+            	  while (true) {
+            		  double frameTimeStamp = TangoJNINative.getFisheyeFrameTimestamp();
+            		  System.out.println("return array fisheye");
+            		  byte[] myArray = TangoJNINative.returnArrayFisheye();
+            		  System.out.println("Done returning array fisheye");
+            		  if (myArray != null && myArray.length != 0)  { 
+        				  bmFisheye.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
+ 
+                	       if (connected) { 
+	                		   try {
+	                			   outFisheyeImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
+	                			   outFisheyeImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
+	                			   outFisheyeImages.println(frameTimeStamp);
+	                			   outFisheyeImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
+	                			   bmFisheye.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketFisheyeImages.getOutputStream());
+	                			   outFisheyeImages.println("DEPTHFRAMEENDINGRIGHTNOW");
 	                		   } catch (IOException ex) {
 	                			   ex.printStackTrace();
 	                			   System.err.println("ERROR!"); 
@@ -286,11 +407,10 @@ public class HelloTangoActivity extends Activity {
               }
           });
           poseThread = new Thread(new Runnable() {
-              public void run() {
+              public void run() { 
             	  while (true) {
             		  double[] currPose = TangoJNINative.returnPoseArray();
-            		  if (connected) {
-            			  System.out.println("currPose.length  " + currPose.length);
+            		  if (connected) { 
 	            		  outPose.println("POSESTARTINGRIGHTNOW");
 	            		  for (int i = 0; i < currPose.length; i++) {
 	            			  outPose.print(currPose[i]);
@@ -299,9 +419,8 @@ public class HelloTangoActivity extends Activity {
 	                		  }
 	                	  }
 	            		  outPose.println("POSEENDINGRIGHTNOW");
-	            		  System.out.println("MYPOSE: " + Arrays.toString(currPose));
             		  }
-            		  try {
+            		  try { 
             			  Thread.sleep(100);
             		  } catch (InterruptedException ex) {
             			  System.err.println("Something weird happened");
@@ -309,11 +428,38 @@ public class HelloTangoActivity extends Activity {
             	  }
               }
           });
-          
+/*
+          poseAreaThread = new Thread(new Runnable() {
+              public void run() { 
+            	  while (true) {
+            		  double[] currPose = TangoJNINative.returnPoseAreaArray();
+            		  if (connected) { 
+	            		  outPoseArea.println("POSESTARTINGRIGHTNOW");
+	            		  for (int i = 0; i < currPose.length; i++) {
+	            			  outPoseArea.print(currPose[i]);
+	            			  if (i + 1 < currPose.length) {
+	            				  outPoseArea.print(",");
+	                		  }
+	                	  }
+	            		  outPoseArea.println("POSEENDINGRIGHTNOW");
+            		  } 
+            		  try { 
+            			  Thread.sleep(100);
+            		  } catch (InterruptedException ex) {
+            			  System.err.println("Something weird happened");
+            		  }
+            	  }
+              }
+          });
+          */
           poseThread.start();
+          //poseAreaThread.start();
           pointCloudThread.start();
-          intrinsicsThread.start();
-          imagesThread.start();
+          intrinsicsColorThread.start();
+          intrinsicsFisheyeThread.start();
+          imagesColorThread.start();
+          imagesFisheyeThread.start();
+
         }
     }
   }

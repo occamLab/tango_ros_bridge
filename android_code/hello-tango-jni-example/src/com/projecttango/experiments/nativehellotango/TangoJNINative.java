@@ -34,15 +34,21 @@ public class TangoJNINative {
 
   public static native void disconnect();
   // byte[] instead of void
-  public static native byte[] returnArray();
+  public static native byte[] returnArrayColor();
   
-  public static native double getFrameTimestamp();
+  public static native byte[] returnArrayFisheye();
+  
+  public static native double getColorFrameTimestamp();
+  
+  public static native double getFisheyeFrameTimestamp();
   
   public static native double[] returnPoseArray();
-  
-  public static native double[] returnDepthCameraPose();
+
+  public static native double[] returnPoseAreaArray();
 
   public static native float[] returnPointCloud();
   
-  public static native double[] returnIntrinsics();
+  public static native double[] returnIntrinsicsColor();
+
+  public static native double[] returnIntrinsicsFisheye();
 }
