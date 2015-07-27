@@ -47,8 +47,10 @@ int main(int argc, char** argv)
 
   sensor_msgs::ImagePtr msg;
   image_transport::Subscriber sub = it.subscribe("/" + camera_name_from + "/image_raw", 1, imageCallback);
+  ros::Rate r(10);
   //cv::namedWindow("myimage");
   while (nh.ok()) {
     ros::spinOnce();
+    r.sleep();
   }
 }
