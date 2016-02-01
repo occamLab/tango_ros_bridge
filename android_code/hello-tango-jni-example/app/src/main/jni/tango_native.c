@@ -196,7 +196,7 @@ static void onTangoEvent(void* context, const TangoEvent* evt) {
 
 static void onFrameAvailable(void* context, TangoCameraId camera, const TangoImageBuffer* imageBufferA) {
 
-		LOGI("pixels %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
+		LOGI("pixels2 %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
 		if (camera == TANGO_CAMERA_FISHEYE) {
 			lastFisheyeFrameTimeStamp = imageBufferA->timestamp;
 			memcpy(fisheye_image_buffer_copy, imageBufferA->data, imageBufferA->stride*imageBufferA->height*3/2);
@@ -300,12 +300,15 @@ bool TangoSetConfig() {
     LOGE("TangoService_getConfig(): Failed");
     return false;
   }
+	/*
+
   // Enable depth.
   if (TangoConfig_setBool(config, "config_enable_depth", true) !=
       TANGO_SUCCESS) {
     LOGE("config_enable_depth Failed");
     return false;
   }
+*/
 
   if (TangoConfig_setBool(config, "config_enable_learning_mode", true)
       != TANGO_SUCCESS) {
@@ -314,6 +317,7 @@ bool TangoSetConfig() {
   } else {
 	  LOGI("AREA LEARING SUCCESSFUL");
   }
+
   // Enable camera.
   if (TangoConfig_setBool(config, "config_enable_color_camera", true) !=
       TANGO_SUCCESS) {

@@ -453,12 +453,12 @@ public class HelloTangoActivity extends Activity {
           });
           */
           poseThread.start();
-          //poseAreaThread.start();
-          pointCloudThread.start();
-          intrinsicsColorThread.start();
-          intrinsicsFisheyeThread.start();
-          imagesColorThread.start();
-          imagesFisheyeThread.start();
+          poseAreaThread.start();
+          //pointCloudThread.start();
+          //intrinsicsColorThread.start();
+          //intrinsicsFisheyeThread.start();
+          //imagesColorThread.start();
+          //imagesFisheyeThread.start();
 
         }
     }

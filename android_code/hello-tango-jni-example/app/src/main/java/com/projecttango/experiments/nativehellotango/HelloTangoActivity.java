@@ -120,18 +120,20 @@ public class HelloTangoActivity extends Activity {
     if (!connected) {
       EditText mEdit   = (EditText)findViewById(R.id.editText1);
       hostName = mEdit.getText().toString();
-      System.out.println("button clicked!! " + mEdit.getText().toString());
+      System.out.println("button clic ked!! " + mEdit.getText().toString());
       preferencesEditor.putString("ROS_HOST",hostName);
       preferencesEditor.commit();
       new AsyncTask<Void, Integer, Void>(){
         @Override
         protected Void doInBackground(Void... arg0) {
           try  {
+            System.out.println("button CREATED  SOCKET! 1");
+
             kkSocketColorImages = new Socket(hostName, portNumberColorImages);
             outColorImages = new PrintWriter(kkSocketColorImages.getOutputStream(), true);
 
             kkSocketFisheyeImages = new Socket(hostName, portNumberFisheyeImages);
-            System.out.println("CREATED SOCKET!");
+            System.out.println("CREATED SOCKET! 1");
             outFisheyeImages = new PrintWriter(kkSocketFisheyeImages.getOutputStream(), true);
 
             kkSocketPointCloud = new Socket(hostName, portNumberPointCloud);
@@ -392,6 +394,7 @@ public class HelloTangoActivity extends Activity {
             }
           }
         });
+
         poseThread = new Thread(new Runnable() {
           public void run() {
             while (true) {
@@ -439,11 +442,11 @@ public class HelloTangoActivity extends Activity {
           });
         poseThread.start();
         poseAreaThread.start();
-        pointCloudThread.start();
-        intrinsicsColorThread.start();
-        intrinsicsFisheyeThread.start();
-        imagesColorThread.start();
-        imagesFisheyeThread.start();
+        //pointCloudThread.start();
+        //intrinsicsColorThread.start();
+        //intrinsicsFisheyeThread.start();
+        //imagesColorThread.start();
+        //imagesFisheyeThread.start();
 
       }
     }
