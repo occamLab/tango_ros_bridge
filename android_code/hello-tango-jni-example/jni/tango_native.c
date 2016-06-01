@@ -196,7 +196,7 @@ static void onTangoEvent(void* context, const TangoEvent* evt) {
 
 static void onFrameAvailable(void* context, TangoCameraId camera, const TangoImageBuffer* imageBufferA) {
 
-		LOGI("pixels %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
+		LOGI("pixels2 %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
 		if (camera == TANGO_CAMERA_FISHEYE) {
 			lastFisheyeFrameTimeStamp = imageBufferA->timestamp;
 			memcpy(fisheye_image_buffer_copy, imageBufferA->data, imageBufferA->stride*imageBufferA->height*3/2);
@@ -210,6 +210,8 @@ static void onFrameAvailable(void* context, TangoCameraId camera, const TangoIma
 }
 
 static void onXYZijAvailable(void* context, const TangoXYZij* XYZ_ij) {
+	printf("MYDEBUG: got a point cloud\n");
+
 	// clear out any old points
 	int i;
 	xyzValid = XYZ_ij->xyz_count;
@@ -300,12 +302,14 @@ bool TangoSetConfig() {
     LOGE("TangoService_getConfig(): Failed");
     return false;
   }
+	/*
   // Enable depth.
   if (TangoConfig_setBool(config, "config_enable_depth", true) !=
       TANGO_SUCCESS) {
     LOGE("config_enable_depth Failed");
     return false;
   }
+	 */
   /*
   if (TangoConfig_setBool(config, "config_enable_learning_mode", true)
       != TANGO_SUCCESS) {
@@ -315,11 +319,13 @@ bool TangoSetConfig() {
 	  LOGI("AREA LEARING SUCCESSFUL");
   }*/
   // Enable camera.
+	/*
   if (TangoConfig_setBool(config, "config_enable_color_camera", true) !=
       TANGO_SUCCESS) {
     LOGE("config_enable_depth Failed");
     return false;
   }
+	 */
 	if (TangoConfig_setBool(config, "config_enable_low_latency_imu_integration", false) !=
 			TANGO_SUCCESS) {
 		LOGE("config_enable_low_latency_imu_integration Failed");
@@ -362,12 +368,12 @@ bool TangoConnectCallbacks() {
 	  return false;
   }
 
-  TangoCoordinateFramePair* pairs = (TangoCoordinateFramePair*)malloc(2*sizeof(TangoCoordinateFramePair));
+  TangoCoordinateFramePair* pairs = (TangoCoordinateFramePair*)malloc(1*sizeof(TangoCoordinateFramePair));
   pairs[0].base = TANGO_COORDINATE_FRAME_START_OF_SERVICE;
   pairs[0].target = TANGO_COORDINATE_FRAME_DEVICE;
 
-  pairs[1].base = TANGO_COORDINATE_FRAME_AREA_DESCRIPTION;
-  pairs[1].target = TANGO_COORDINATE_FRAME_DEVICE;
+  //pairs[1].base = TANGO_COORDINATE_FRAME_AREA_DESCRIPTION;
+  //pairs[1].target = TANGO_COORDINATE_FRAME_DEVICE;
   // Currently cannot get the pose of the depth camera
   if (TangoService_connectOnPoseAvailable(2, pairs, onPoseAvailable)
       != TANGO_SUCCESS) {

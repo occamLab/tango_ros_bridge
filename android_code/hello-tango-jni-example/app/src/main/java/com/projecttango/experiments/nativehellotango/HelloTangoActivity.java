@@ -15,7 +15,6 @@
  */
 
 // TODO: handle disconnects from the socket server (reset everything)
-// TODO: PointCloud2 instead of PointCloud (faster)
 
 package com.projecttango.experiments.nativehellotango;
 
@@ -104,10 +103,9 @@ public class HelloTangoActivity extends Activity {
     setTitle(R.string.app_name);
     // Tango fish eye
     bmFisheye = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888);
+    // tango color camera
     bmColor = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888);
 
-    // tango color camera
-    //bm = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888);
     ImageView image = (ImageView) findViewById(R.id.test_image);
     image.setImageBitmap(bmColor);
     preferences = getSharedPreferences("myvals", 0);
@@ -442,11 +440,11 @@ public class HelloTangoActivity extends Activity {
           });
         poseThread.start();
         poseAreaThread.start();
-        //pointCloudThread.start();
+        pointCloudThread.start();
         //intrinsicsColorThread.start();
         //intrinsicsFisheyeThread.start();
-        //imagesColorThread.start();
-        //imagesFisheyeThread.start();
+        imagesColorThread.start();
+        imagesFisheyeThread.start();
 
       }
     }

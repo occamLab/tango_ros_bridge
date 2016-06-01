@@ -196,7 +196,7 @@ static void onTangoEvent(void* context, const TangoEvent* evt) {
 
 static void onFrameAvailable(void* context, TangoCameraId camera, const TangoImageBuffer* imageBufferA) {
 
-		LOGI("pixels2 %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
+		LOGI("pixelstest %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
 		if (camera == TANGO_CAMERA_FISHEYE) {
 			lastFisheyeFrameTimeStamp = imageBufferA->timestamp;
 			memcpy(fisheye_image_buffer_copy, imageBufferA->data, imageBufferA->stride*imageBufferA->height*3/2);
@@ -300,7 +300,6 @@ bool TangoSetConfig() {
     LOGE("TangoService_getConfig(): Failed");
     return false;
   }
-	/*
 
   // Enable depth.
   if (TangoConfig_setBool(config, "config_enable_depth", true) !=
@@ -308,7 +307,6 @@ bool TangoSetConfig() {
     LOGE("config_enable_depth Failed");
     return false;
   }
-*/
 
   if (TangoConfig_setBool(config, "config_enable_learning_mode", true)
       != TANGO_SUCCESS) {
@@ -344,7 +342,6 @@ bool TangoConnectCallbacks() {
   if (TangoService_connectOnTangoEvent(onTangoEvent) != TANGO_SUCCESS) {
 		LOGI("TANGO EVENT FAILED");
   }
-
 
   if (TangoService_connectOnFrameAvailable(TANGO_CAMERA_FISHEYE, 0, onFrameAvailable) != TANGO_SUCCESS) {
 	LOGI("frame available failed");
