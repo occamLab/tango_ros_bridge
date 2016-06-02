@@ -32,9 +32,14 @@ import android.widget.Toast;
 
 import com.google.tango.hellotangojni.R;
 
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -65,6 +70,7 @@ public class HelloTangoActivity extends Activity {
   private Socket kkSocketFisheyeImages;
   private PrintWriter outFisheyeImages;
 
+  private DatagramSocket udpColorImages;
   private Socket kkSocketColorImages;
   private PrintWriter outColorImages;
 
@@ -74,6 +80,7 @@ public class HelloTangoActivity extends Activity {
   private Socket kkSocketPoseArea;
   private PrintWriter outPoseArea;
 
+  private DatagramSocket udpPointCloud;
   private Socket kkSocketPointCloud;
   private PrintWriter outPointCloud;
 
@@ -95,6 +102,8 @@ public class HelloTangoActivity extends Activity {
 
   protected Bitmap bmColor;
   protected Bitmap bmFisheye;
+
+  private InetAddress remote;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -118,6 +127,11 @@ public class HelloTangoActivity extends Activity {
     if (!connected) {
       EditText mEdit   = (EditText)findViewById(R.id.editText1);
       hostName = mEdit.getText().toString();
+      try {
+        remote = InetAddress.getByName(hostName);
+      } catch (Exception ex) {
+        ex.printStackTrace();
+      }
       System.out.println("button clic ked!! " + mEdit.getText().toString());
       preferencesEditor.putString("ROS_HOST",hostName);
       preferencesEditor.commit();
@@ -127,6 +141,7 @@ public class HelloTangoActivity extends Activity {
           try  {
             System.out.println("button CREATED  SOCKET! 1");
 
+            udpColorImages = new DatagramSocket();
             kkSocketColorImages = new Socket(hostName, portNumberColorImages);
             outColorImages = new PrintWriter(kkSocketColorImages.getOutputStream(), true);
 
@@ -134,6 +149,7 @@ public class HelloTangoActivity extends Activity {
             System.out.println("CREATED SOCKET! 1");
             outFisheyeImages = new PrintWriter(kkSocketFisheyeImages.getOutputStream(), true);
 
+            udpPointCloud = new DatagramSocket();
             kkSocketPointCloud = new Socket(hostName, portNumberPointCloud);
             outPointCloud = new PrintWriter(kkSocketPointCloud.getOutputStream(), true);
 
@@ -291,9 +307,10 @@ public class HelloTangoActivity extends Activity {
               imagesColorThread.interrupt();
               System.out.println("POINT CLOUD SIZE " + currPointCloud.length);
               if (connected) {
-                outPointCloud.println("POINTCLOUDSTARTINGRIGHTNOW");
+                ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
                 try {
-                  DataOutputStream os = new DataOutputStream(kkSocketPointCloud.getOutputStream());
+                  udpPayload.write("POINTCLOUDSTARTINGRIGHTNOW\n".getBytes());
+                  //DataOutputStream os = new DataOutputStream(kkSocketPointCloud.getOutputStream());
                   byte buf[] = new byte[4*currPointCloud.length];
                   for (int i=0; i<currPointCloud.length; ++i)
                   {
@@ -303,16 +320,21 @@ public class HelloTangoActivity extends Activity {
                     buf[4 * i + 2] = (byte) (val >> 8);
                     buf[4 * i + 3] = (byte) (val);
                   }
-                  os.write(buf);
+                  udpPayload.write(buf);
+                  udpPayload.write("\n".getBytes());
+                  udpPayload.write("POINTCLOUDENDINGRIGHTNOW\n".getBytes());
+                  byte[] payload = udpPayload.toByteArray();
+                  System.out.println("WEIRDNESS " + (payload == null));
+                  System.out.println("WEIRDNESS remote " + (remote == null));
+                  udpPointCloud.send(new DatagramPacket(payload, payload.length, remote, portNumberPointCloud));
+                  //os.write(buf);
                 } catch (Exception ex) {
-                  System.out.println("WEIRDNESS");
+                  System.out.println("WEIRDNESS " + ex.getMessage());
                 }
                 System.out.println("pcAs WROTE TO SOCKET!");
-                outPointCloud.println();
-                outPointCloud.println("POINTCLOUDENDINGRIGHTNOW");
               }
               try {
-                Thread.sleep(1000);
+                Thread.sleep(200);
               } catch (InterruptedException ex) {
                 System.err.println("Something weird happened");
               }
@@ -330,12 +352,16 @@ public class HelloTangoActivity extends Activity {
 
                 if (connected) {
                   try {
-                    outColorImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
-                    outColorImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
-                    outColorImages.println(frameTimeStamp);
-                    outColorImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
-                    bmColor.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketColorImages.getOutputStream());
-                    outColorImages.println("DEPTHFRAMEENDINGRIGHTNOW");
+                    ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                    udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
+                    udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
+                    String frameTimeStampAsString = String.valueOf(frameTimeStamp);
+                    udpPayload.write((frameTimeStampAsString + "\n").getBytes());
+                    udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
+                    bmColor.compress(Bitmap.CompressFormat.JPEG, 50, udpPayload);
+                    udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
+                    byte[] payload = udpPayload.toByteArray();
+                    udpColorImages.send(new DatagramPacket(payload, payload.length, remote, portNumberColorImages));
                   } catch (IOException ex) {
                     ex.printStackTrace();
                     System.err.println("ERROR!");
