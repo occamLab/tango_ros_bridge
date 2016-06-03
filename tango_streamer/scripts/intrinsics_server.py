@@ -61,7 +61,6 @@ while True:
 	backlog = backlog[int_end_pos+len(end_intrinsics_marker):]
 	
 
-	intrinsics = all_data[start+len(begin_intrinsics_marker):index]
 	intrinsics_vals = intrinsics.split(",")
 	print intrinsics_vals
 	print "constructing message"
