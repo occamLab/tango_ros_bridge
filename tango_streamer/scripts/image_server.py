@@ -46,13 +46,14 @@ while True:
     #blocks until can grab udp packet
     data = sock.recv(65535)
     if not data:
-        break
+        continue #<- OK
 
     #add it to the to-be-processed data
     backlog += data
     
     #Mark that there might be pictures in `backlog`
     pictures_remain = True
+    last_timestamp = 0
 
     #Loop to search backlog for pictures
     while pictures_remain: 
@@ -62,17 +63,23 @@ while True:
         #It found a picture!
         if jpeg_begin_loc != -1 and  jpeg_end_loc != -1:
             jpg = backlog[jpeg_begin_loc+len(begin_frame_marker):jpeg_end_loc]
-            backlog = backlog[jpeg_eng_loc+len(end_frame_marker):]
+            backlog = backlog[jpeg_end_loc+len(end_frame_marker):]
 
             ts_begin_loc = jpg.find(begin_timestamp_marker)
             ts_end_loc = jpg.find(end_timestamp_marker)
 
             if ts_begin_loc == -1 or ts_end_loc == -1:
                 #something's fishy, discard jpeg
-                print("JPEG discarded, malformed data")
-                break
+                print "JPEG discarded, malformed data"
+                continue
                 
-            ts = jpg[ts_begin_loc+len(begin_timestamp_marker):ts_end_marker]
+            ts = float(jpg[ts_begin_loc+len(begin_timestamp_marker):ts_end_loc])
+		
+	    if ts > last_timestamp:
+		last_timestamp = ts
+	    else:
+		continue
+	
             jpg = jpg[ts_end_loc+len(end_timestamp_marker):]
 
             print "{} bytes of JPEG recvd".format(len(jpg))
