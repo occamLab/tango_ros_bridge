@@ -32,9 +32,14 @@ import android.widget.Toast;
 
 import com.google.tango.hellotangojni.R;
 
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -62,11 +67,8 @@ public class HelloTangoActivity extends Activity {
   final int portNumberIntrinsicsFisheye = 11116;
   final int portNumberPoseArea = 11117;
 
-  private Socket kkSocketFisheyeImages;
-  private PrintWriter outFisheyeImages;
-
-  private Socket kkSocketColorImages;
-  private PrintWriter outColorImages;
+  private DatagramSocket udpFisheyeImages;
+  private DatagramSocket udpColorImages;
 
   private Socket kkSocketPose;
   private PrintWriter outPose;
@@ -74,6 +76,7 @@ public class HelloTangoActivity extends Activity {
   private Socket kkSocketPoseArea;
   private PrintWriter outPoseArea;
 
+  private DatagramSocket udpPointCloud;
   private Socket kkSocketPointCloud;
   private PrintWriter outPointCloud;
 
@@ -95,6 +98,8 @@ public class HelloTangoActivity extends Activity {
 
   protected Bitmap bmColor;
   protected Bitmap bmFisheye;
+
+  private InetAddress remote;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -118,6 +123,11 @@ public class HelloTangoActivity extends Activity {
     if (!connected) {
       EditText mEdit   = (EditText)findViewById(R.id.editText1);
       hostName = mEdit.getText().toString();
+      try {
+        remote = InetAddress.getByName(hostName);
+      } catch (Exception ex) {
+        ex.printStackTrace();
+      }
       System.out.println("button clic ked!! " + mEdit.getText().toString());
       preferencesEditor.putString("ROS_HOST",hostName);
       preferencesEditor.commit();
@@ -127,16 +137,12 @@ public class HelloTangoActivity extends Activity {
           try  {
             System.out.println("button CREATED  SOCKET! 1");
 
-            kkSocketColorImages = new Socket(hostName, portNumberColorImages);
-            outColorImages = new PrintWriter(kkSocketColorImages.getOutputStream(), true);
-
-            kkSocketFisheyeImages = new Socket(hostName, portNumberFisheyeImages);
-            System.out.println("CREATED SOCKET! 1");
-            outFisheyeImages = new PrintWriter(kkSocketFisheyeImages.getOutputStream(), true);
-
-            kkSocketPointCloud = new Socket(hostName, portNumberPointCloud);
-            outPointCloud = new PrintWriter(kkSocketPointCloud.getOutputStream(), true);
-
+            udpColorImages = new DatagramSocket();
+            udpFisheyeImages = new DatagramSocket();
+            udpPointCloud = new DatagramSocket();
+            //kkSocketPointCloud = new Socket(hostName, portNumberPointCloud);
+            //outPointCloud = new PrintWriter(kkSocketPointCloud.getOutputStream(), true);
+/*
             kkSocketPose = new Socket(hostName, portNumberPose);
             outPose = new PrintWriter(kkSocketPose.getOutputStream(), true);
 
@@ -148,7 +154,7 @@ public class HelloTangoActivity extends Activity {
 
             kkSocketIntrinsicsFisheye = new Socket(hostName, portNumberIntrinsicsFisheye);
             outIntrinsicsFisheye = new PrintWriter(kkSocketIntrinsicsFisheye.getOutputStream(), true);
-
+*/
             connected = true;
             System.out.println("MYDEBUG: CONNECTED!");
           } catch (Exception ex) {
@@ -175,13 +181,13 @@ public class HelloTangoActivity extends Activity {
         @Override
         protected Void doInBackground(Void... arg0) {
           try {
-            kkSocketColorImages.close();
-            kkSocketFisheyeImages.close();
-            kkSocketPose.close();
-            kkSocketPoseArea.close();
-            kkSocketPointCloud.close();
-            kkSocketIntrinsicsColor.close();
-            kkSocketIntrinsicsFisheye.close();
+            //kkSocketColorImages.close();
+            //kkSocketFisheyeImages.close();
+            //kkSocketPose.close();
+            //kkSocketPoseArea.close();
+            //kkSocketPointCloud.close();
+            //kkSocketIntrinsicsColor.close();
+            //kkSocketIntrinsicsFisheye.close();
             connected = false;
             System.out.println("CLOSINGDOWN!!!");
           } catch (Exception ex) {
@@ -275,7 +281,7 @@ public class HelloTangoActivity extends Activity {
                 outIntrinsicsColor.println("INTRINSICSENDINGRIGHTNOW");
               }
               try {
-                Thread.sleep(1000);
+                Thread.sleep(100);
               } catch (InterruptedException ex) {
                 System.err.println("Something weird happened");
               }
@@ -291,11 +297,14 @@ public class HelloTangoActivity extends Activity {
               imagesColorThread.interrupt();
               System.out.println("POINT CLOUD SIZE " + currPointCloud.length);
               if (connected) {
-                outPointCloud.println("POINTCLOUDSTARTINGRIGHTNOW");
+                ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
                 try {
-                  DataOutputStream os = new DataOutputStream(kkSocketPointCloud.getOutputStream());
-                  byte buf[] = new byte[4*currPointCloud.length];
-                  for (int i=0; i<currPointCloud.length; ++i)
+                  udpPayload.write("POINTCLOUDSTARTINGRIGHTNOW\n".getBytes());
+                  //DataOutputStream os = new DataOutputStream(kkSocketPointCloud.getOutputStream());
+                  int currPointCloudLength = currPointCloud.length > 15000 ? 15000 : currPointCloud.length; // overriding until we figure out how to either downsample or split across multiple packets
+                  byte buf[] = new byte[4*currPointCloudLength];
+
+                  for (int i=0; i<currPointCloudLength; ++i)
                   {
                     int val = Float.floatToRawIntBits(currPointCloud[i]);
                     buf[4 * i] = (byte) (val >> 24);
@@ -303,16 +312,21 @@ public class HelloTangoActivity extends Activity {
                     buf[4 * i + 2] = (byte) (val >> 8);
                     buf[4 * i + 3] = (byte) (val);
                   }
-                  os.write(buf);
+                  udpPayload.write(buf);
+                  udpPayload.write("\n".getBytes());
+                  udpPayload.write("POINTCLOUDENDINGRIGHTNOW\n".getBytes());
+                  byte[] payload = udpPayload.toByteArray();
+                  System.out.println("WEIRDNESS " + (payload == null));
+                  System.out.println("WEIRDNESS remote " + (remote == null));
+                  udpPointCloud.send(new DatagramPacket(payload, payload.length, remote, portNumberPointCloud));
+                  //os.write(buf);
                 } catch (Exception ex) {
-                  System.out.println("WEIRDNESS");
+                  System.out.println("WEIRDNESS " + ex.getMessage());
                 }
                 System.out.println("pcAs WROTE TO SOCKET!");
-                outPointCloud.println();
-                outPointCloud.println("POINTCLOUDENDINGRIGHTNOW");
               }
               try {
-                Thread.sleep(1000);
+                Thread.sleep(200);
               } catch (InterruptedException ex) {
                 System.err.println("Something weird happened");
               }
@@ -330,12 +344,16 @@ public class HelloTangoActivity extends Activity {
 
                 if (connected) {
                   try {
-                    outColorImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
-                    outColorImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
-                    outColorImages.println(frameTimeStamp);
-                    outColorImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
-                    bmColor.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketColorImages.getOutputStream());
-                    outColorImages.println("DEPTHFRAMEENDINGRIGHTNOW");
+                    ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                    udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
+                    udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
+                    String frameTimeStampAsString = String.valueOf(frameTimeStamp);
+                    udpPayload.write((frameTimeStampAsString + "\n").getBytes());
+                    udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
+                    bmColor.compress(Bitmap.CompressFormat.JPEG, 50, udpPayload);
+                    udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
+                    byte[] payload = udpPayload.toByteArray();
+                    udpColorImages.send(new DatagramPacket(payload, payload.length, remote, portNumberColorImages));
                   } catch (IOException ex) {
                     ex.printStackTrace();
                     System.err.println("ERROR!");
@@ -351,7 +369,7 @@ public class HelloTangoActivity extends Activity {
               });
               try {
                 // this is pretty damn fast... would be nice to have some flow control
-                Thread.sleep(30);
+                Thread.sleep(100);
               } catch (InterruptedException ex) {
                 // System.err.println("Something weird happened");
               }
@@ -363,20 +381,22 @@ public class HelloTangoActivity extends Activity {
           public void run() {
             while (true) {
               double frameTimeStamp = TangoJNINative.getFisheyeFrameTimestamp();
-              System.out.println("return array fisheye");
               byte[] myArray = TangoJNINative.returnArrayFisheye();
-              System.out.println("Done returning array fisheye");
               if (myArray != null && myArray.length != 0)  {
                 bmFisheye.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
 
                 if (connected) {
                   try {
-                    outFisheyeImages.println("DEPTHFRAMESTARTINGRIGHTNOW");
-                    outFisheyeImages.println("DEPTHTIMESTAMPSTARTINGRIGHTNOW");
-                    outFisheyeImages.println(frameTimeStamp);
-                    outFisheyeImages.println("DEPTHTIMESTAMPENDINGRIGHTNOW");
-                    bmFisheye.compress(Bitmap.CompressFormat.JPEG, 50, kkSocketFisheyeImages.getOutputStream());
-                    outFisheyeImages.println("DEPTHFRAMEENDINGRIGHTNOW");
+                    ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                    udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
+                    udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
+                    String frameTimeStampAsString = String.valueOf(frameTimeStamp);
+                    udpPayload.write((frameTimeStampAsString + "\n").getBytes());
+                    udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
+                    bmFisheye.compress(Bitmap.CompressFormat.JPEG, 50, udpPayload);
+                    udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
+                    byte[] payload = udpPayload.toByteArray();
+                    udpFisheyeImages.send(new DatagramPacket(payload, payload.length, remote, portNumberFisheyeImages));
                   } catch (IOException ex) {
                     ex.printStackTrace();
                     System.err.println("ERROR!");
@@ -385,7 +405,7 @@ public class HelloTangoActivity extends Activity {
               }
               try {
                 // this is pretty damn fast... would be nice to have some flow control
-                Thread.sleep(30);
+                Thread.sleep(100);
               } catch (InterruptedException ex) {
                 // System.err.println("Something weird happened");
               }
@@ -438,8 +458,8 @@ public class HelloTangoActivity extends Activity {
             	  }
               }
           });
-        poseThread.start();
-        poseAreaThread.start();
+        //poseThread.start();
+        //poseAreaThread.start();
         pointCloudThread.start();
         //intrinsicsColorThread.start();
         //intrinsicsFisheyeThread.start();
