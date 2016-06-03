@@ -283,12 +283,13 @@ static void onPoseAvailable(void* context, const TangoPoseData* pose) {
 	}
 }
 
-bool TangoInitialize(JNIEnv* env, jobject activity) {
-  // Initialize Tango Service.
-  // TODO(jguo): pass in env and jobject from activity.
-  if (TangoService_initialize(env, activity) != TANGO_SUCCESS) {
-    LOGE("TangoService_initialize(): Failed");
+bool TangoSetBinder(JNIEnv* env, jobject service) {
+  LOGI("Attempting to bind to Tango Service");
+  if (TangoService_setBinder(env, service) != TANGO_SUCCESS) {
+    LOGE("TangoService_setBinder(): Failed");
     return false;
+  } else {
+	  LOGI("Successfully bound to serivice");
   }
   return true;
 }
@@ -321,14 +322,21 @@ bool TangoSetConfig() {
       TANGO_SUCCESS) {
     LOGE("config_enable_depth Failed");
     return false;
+  } else {
+	  LOGI("ENABLED COLOR CAMERA SUCCESSFULLY");
   }
+
 	if (TangoConfig_setBool(config, "config_enable_low_latency_imu_integration", false) !=
 			TANGO_SUCCESS) {
 		LOGE("config_enable_low_latency_imu_integration Failed");
+	} else {
+		LOGI("SUCCESSFULLY DISABLED LOW LATENCY POSE");
 	}
 	if (TangoConfig_setBool(config, "config_high_rate_pose", false) !=
 			TANGO_SUCCESS) {
 		LOGE("config_high_rate_pose Failed");
+	} else {
+		LOGI("SUCCESSFULLY DISABLED HIGH RATE POSE");
 	}
 
   return true;
@@ -381,7 +389,7 @@ bool TangoConnectCallbacks() {
 bool TangoConnect() {
   // Connect to the Tango Service.
   // Note: connecting Tango service will start the motion
-  // tracking automatically.
+  // tracking automatically
   if (TangoService_connect(NULL, config) != TANGO_SUCCESS) {
     LOGE("TangoService_connect(): Failed");
     return false;
@@ -395,9 +403,9 @@ void DisconnectTango()
   TangoService_disconnect();
 }
 
-JNIEXPORT void JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_initialize(JNIEnv* env, jobject obj, jobject activity)
+JNIEXPORT void JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_setBinder(JNIEnv* env, jobject obj, jobject service)
 {
-  TangoInitialize(env, activity);
+  TangoSetBinder(env, service);
 }
 
 JNIEXPORT void JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_setupConfig(JNIEnv* env, jobject obj, jobject activity)
