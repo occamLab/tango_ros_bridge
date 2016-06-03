@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python 
 """
 A simple echo server
 """
@@ -21,58 +20,61 @@ import tf
 
 rospy.init_node("intrinsics_server")
 camera_name = rospy.get_param('~camera_name')
-
+port = rospy.get_param('~port_number')
 pub_camera_info = rospy.Publisher('/' + camera_name + '/camera_info', CameraInfo, queue_size=10)
 
-host = ''
-port = rospy.get_param('~port_number')
-backlog = 5
-size = 1024
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind((host,port))
-s.listen(backlog)
-all_data = ''
+
 begin_intrinsics_marker = 'INTRINSICSSTARTINGRIGHTNOW\n' 
 end_intrinsics_marker = 'INTRINSICSENDINGRIGHTNOW\n'
-while True:
-	client, address = s.accept()
-	while True:
-		try:
-			data = client.recv(size)
-			if not data:
-				break
-			all_data += data
-			index = all_data.find(end_intrinsics_marker)
-			try:
-				if index != -1:
-					start = all_data.find(begin_intrinsics_marker)
-					intrinsics = all_data[start+len(begin_intrinsics_marker):index]
-					intrinsics_vals = intrinsics.split(",")
-					print intrinsics_vals
-					print "constructing message"
-					ROS_timestamp = rospy.Time.now()
-					msg = CameraInfo(header=Header(stamp=rospy.Time.now()),
-									 width=float(intrinsics_vals[0]),
-									 height=float(intrinsics_vals[1]),
-									 distortion_model='plumb_bob',
-									 D=[float(n) for n in intrinsics_vals[6:]],
-									 K=[float(intrinsics_vals[2]), 0, float(intrinsics_vals[4]),
-									 	0, float(intrinsics_vals[3]), float(intrinsics_vals[5]),
-									 	0, 0, 1],
-									 P =[float(intrinsics_vals[2]), 0, float(intrinsics_vals[4]), 0,
-									 	0, float(intrinsics_vals[3]), float(intrinsics_vals[5]), 0,
-									 	0, 0, 1, 0])
 
-					pub_camera_info.publish(msg)
-					all_data = all_data[index+len(end_intrinsics_marker):]
-			except Exception as e:
-				print e
-				# assume we had a bogus message
-				all_data = ""
-		except socket.error, msg:
-			sys.stderr.write('ERROR: %s\n' % msg)
-			#probably got disconnected
-			all_data = ''
-			print "DISCONNECTED"
-			break
-	client.close()
+host = ''
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((host,port))
+
+
+backlog = ''
+
+
+while True:
+    data = sock.recv(65535)
+
+    backlog += data
+
+    intrinsics_remain = True
+
+    while intrinsics_remain:
+	int_start_pos = backlog.find(begin_intrinsics_marker)
+
+	if int_start_pos == -1:
+	    intrinsics_remain = False
+	    break
+	
+	backlog = backlog[int_start_pos:]
+
+	int_end_pos = backlog.find(end_intrinsics_marker)
+	
+	if int_end_pos == -1:
+	    intrinsics_remain = False
+	    break
+
+	intrinsics = backlog[len(begin_intrinsics_marker):int_end_pos]
+	backlog = backlog[int_end_pos+len(end_intrinsics_marker):]
+	
+
+	intrinsics = all_data[start+len(begin_intrinsics_marker):index]
+	intrinsics_vals = intrinsics.split(",")
+	print intrinsics_vals
+	print "constructing message"
+	ROS_timestamp = rospy.Time.now()
+	msg = CameraInfo(header=Header(stamp=rospy.Time.now()),
+		         width=float(intrinsics_vals[0]),
+	                 height=float(intrinsics_vals[1]),
+			 distortion_model='plumb_bob',
+			 D=[float(n) for n in intrinsics_vals[6:]],
+			 K=[float(intrinsics_vals[2]), 0, float(intrinsics_vals[4]),
+ 		 	 0, float(intrinsics_vals[3]), float(intrinsics_vals[5]), 0, 0, 1],
+			 P =[float(intrinsics_vals[2]), 0, float(intrinsics_vals[4]), 0,
+			 0, float(intrinsics_vals[3]), float(intrinsics_vals[5]), 0,
+			 0, 0, 1, 0])
+
+	pub_camera_info.publish(msg)
