@@ -41,8 +41,11 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((host, port))
 backlog = ""
 
+
+
+br = tf.TransformBroadcaster()
 while True:
-    data = sock.recv(65535)
+    data = sock.recv(4096)
 
     backlog += data
 
