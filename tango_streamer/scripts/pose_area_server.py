@@ -3,7 +3,7 @@
 A simple echo server
 """
 
-import socket
+from udp import UDPhandle
 import rospy
 from sensor_msgs.msg import CompressedImage, PointCloud
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion
@@ -80,6 +80,8 @@ tf_listener = None
 
 def handle_tango_clock(msg):
     global tango_clock_offset
+    global tango_clock_offset
+
     tango_clock_offset = msg.data
 
 def handle_odom_pose(msg):
@@ -89,16 +91,12 @@ def handle_odom_pose(msg):
 
 rospy.init_node("pose_area_server")
 
-host = ''
 port = rospy.get_param('~port_number')
 pose_topic = rospy.get_param('~pose_topic')
 coordinate_frame = rospy.get_param('~coordinate_frame')
 
 transform_translation = (0.0 ,0.0, 0.0)
 transform_rotation = (0.0 , 0.0 , 0.0, 1.0)
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((host,port))
 
 begin_pose_marker = 'POSESTARTINGRIGHTNOW\n' 
 end_pose_marker = 'POSEENDINGRIGHTNOW\n'
@@ -110,66 +108,51 @@ pose_sub = rospy.Subscriber('/tango_pose', PoseStamped, handle_odom_pose)
 tf_broadcaster = tf.TransformBroadcaster()
 tf_listener = tf.TransformListener()
 
-backlog = ""
 
-while True:
-    data = sock.recv(4096)
-    backlog += data
+@UDPhandle(port=port, start_delim=begin_pose_marker, end_delim=end_pose_marker)
+def handle_pkt(pkt=None):
 
-    pose_remains = True
+    global tango_clock_valid 
+    global tango_clock_offset
+    global tf_broadcaster
+    global tf_listener
 
-    while pose_remains:
-	pose_start_loc = backlog.find(begin_pose_marker)
-	
-	if pose_start_loc == -1:
-	    pose_remains = False
-	    break
-	
-	backlog = backlog[pose_start_loc:]
-	
-	pose_end_loc = backlog.find(end_pose_marker)
-	
-	if pose_end_loc == -1:
-	    pose_remains = False
-	    break
-	
-	pose = backlog[len(begin_pose_marker):pose_end_loc]
-	backlog = backlog[pose_end_loc+len(end_pose_marker):]
-        
-        pose_vals = pose.split(",")
-        tango_timestamp = pose_vals[-3]
-        pose_vals = pose_vals[0:-3]
+    pose_vals = pkt.split(",")
+    tango_timestamp = pose_vals[-3]
+    pose_vals = pose_vals[0:-3]
 
-        ROS_timestamp = rospy.Time.now()
+    ROS_timestamp = rospy.Time.now()
 
-        msg = PoseStamped()
-        # might need to revisit time stamps
-        msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
-        msg.header.frame_id = coordinate_frame
-        print tango_timestamp
-        msg.pose.position.x = float(pose_vals[0])
-        msg.pose.position.y = float(pose_vals[1])
-        msg.pose.position.z = float(pose_vals[2])
+    msg = PoseStamped()
+    # might need to revisit time stamps
+    msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
+    msg.header.frame_id = coordinate_frame
+    print tango_timestamp
+    msg.pose.position.x = float(pose_vals[0])
+    msg.pose.position.y = float(pose_vals[1])
+    msg.pose.position.z = float(pose_vals[2])
 
-        # two of the rotation axes seem to be off...
-        # we are fixing this in a hacky way right now
-        euler_angles = euler_from_quaternion(pose_vals[3:])
-        pose_vals[3:] = quaternion_from_euler(euler_angles[1],
-                                              euler_angles[0]+pi/2, # this is right
-                                              euler_angles[2]-pi/2)
-        euler_angles_transformed = euler_from_quaternion(pose_vals[3:])
+    # two of the rotation axes seem to be off...
+    # we are fixing this in a hacky way right now
+    euler_angles = euler_from_quaternion(pose_vals[3:])
+    pose_vals[3:] = quaternion_from_euler(euler_angles[1],
+                                          euler_angles[0]+pi/2, # this is right
+                                          euler_angles[2]-pi/2)
+    euler_angles_transformed = euler_from_quaternion(pose_vals[3:])
 
-        msg.pose.orientation.x = float(pose_vals[3])
-        msg.pose.orientation.y = float(pose_vals[4])
-        msg.pose.orientation.z = float(pose_vals[5])
-        msg.pose.orientation.w = float(pose_vals[6])
+    msg.pose.orientation.x = float(pose_vals[3])
+    msg.pose.orientation.y = float(pose_vals[4])
+    msg.pose.orientation.z = float(pose_vals[5])
+    msg.pose.orientation.w = float(pose_vals[6])
 
-        euler_angles_depth_camera = (euler_angles_transformed[0],
-                                     euler_angles_transformed[1],
-                                     euler_angles_transformed[2])
-        pub_pose.publish(msg)
-        latest_area_learning_pose = msg
-        if latest_area_learning_pose and latest_odom_pose:
-            fix_area_learning_to_odom_transform(latest_area_learning_pose, latest_odom_pose, tf_broadcaster, tf_listener)
-    	tango_clock_valid = False
-    	tango_clock_offset = -1.0
+    euler_angles_depth_camera = (euler_angles_transformed[0],
+                                 euler_angles_transformed[1],
+                                 euler_angles_transformed[2])
+    pub_pose.publish(msg)
+    latest_area_learning_pose = msg
+    if latest_area_learning_pose and latest_odom_pose:
+        fix_area_learning_to_odom_transform(latest_area_learning_pose, latest_odom_pose, tf_broadcaster, tf_listener)
+    tango_clock_valid = False
+    tango_clock_offset = -1.0
+
+handle_pkt()

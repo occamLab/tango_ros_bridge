@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import socket
+from udp import UDPhandle
 import rospy
 import sys
 
@@ -31,73 +31,32 @@ end_frame_marker = 'DEPTHFRAMEENDINGRIGHTNOW\n'
 begin_timestamp_marker = 'DEPTHTIMESTAMPSTARTINGRIGHTNOW\n'
 end_timestamp_marker = 'DEPTHTIMESTAMPENDINGRIGHTNOW\n'
 
-#socket details
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((host, port))
 
-#data storage
-backlog = ""
+@UDPhandle(port=port, start_delim=begin_frame_marker, end_delim=end_frame_marker)
+def handle_pkt(pkt=None):
+    ts_begin_loc = pkt.find(begin_timestamp_marker)
+    ts_end_loc = pkt.find(end_timestamp_marker)
 
-
-
-#Loop to sit on socket and grab data
-while True:
-
-    #blocks until can grab udp packet
-    data = sock.recv(65535)
-    if not data:
-        continue #<- OK
-
-    #add it to the to-be-processed data
-    backlog += data
-    
-    #Mark that there might be pictures in `backlog`
-    pictures_remain = True
-    last_timestamp = 0
-
-    #Loop to search backlog for pictures
-    while pictures_remain: 
-        jpeg_begin_loc = backlog.find(begin_frame_marker)
-        jpeg_end_loc = backlog.find(end_frame_marker)
+    if ts_begin_loc == -1 or ts_end_loc == -1:
+        #something's fishy, discard jpeg
+        print "JPEG discarded, malformed data"
+        return 
         
-        #It found a picture!
-        if jpeg_begin_loc != -1 and  jpeg_end_loc != -1:
-            jpg = backlog[jpeg_begin_loc+len(begin_frame_marker):jpeg_end_loc]
-            backlog = backlog[jpeg_end_loc+len(end_frame_marker):]
-
-            ts_begin_loc = jpg.find(begin_timestamp_marker)
-            ts_end_loc = jpg.find(end_timestamp_marker)
-
-            if ts_begin_loc == -1 or ts_end_loc == -1:
-                #something's fishy, discard jpeg
-                print "JPEG discarded, malformed data"
-                continue
-                
-            ts = float(jpg[ts_begin_loc+len(begin_timestamp_marker):ts_end_loc])
-		
-	    if ts > last_timestamp:
-		last_timestamp = ts
-	    else:
-		continue
+    ts = float(pkt[ts_begin_loc+len(begin_timestamp_marker):ts_end_loc])
 	
-            jpg = jpg[ts_end_loc+len(end_timestamp_marker):]
+#    if ts > last_ts:
+#	last_ts = ts
+#    else:
+#	return
 
-            print "{} bytes of JPEG recvd".format(len(jpg))
-            msg = CompressedImage()
-            msg.header.stamp  = rospy.Time(tango_clock_offset + float(ts))
-            msg.header.frame_id = camera_name
-            msg.data = jpg
-            msg.format = 'jpeg'
-            pub_camera.publish(msg)
+    pkt = pkt[ts_end_loc+len(end_timestamp_marker):]
 
+    print "{} bytes of JPEG recvd".format(len(pkt))
+    msg = CompressedImage()
+    msg.header.stamp  = rospy.Time(tango_clock_offset + float(ts))
+    msg.header.frame_id = camera_name
+    msg.data = pkt
+    msg.format = 'jpeg'
+    pub_camera.publish(msg)
 
-        #no end bytes in sight
-        elif jpeg_end_loc == -1:
-            pictures_remain = False
-
-        #no beginning bytes in sight
-        elif jpeg_begin_loc == -1:
-            backlog = ""
-            pictures_remain = False
-
-
+handle_pkt()

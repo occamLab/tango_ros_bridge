@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import socket
+from udp import UDPhandle
 import zlib
 import array
 import rospy
@@ -26,66 +26,30 @@ pub_point_cloud = rospy.Publisher('/point_cloud', PointCloud, queue_size=10)
 
 rospy.init_node("pointcloud_stream")
 
-host = ''
-port = 11112
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((host,port))
-
 begin_point_cloud_marker = 'POINTCLOUDSTARTINGRIGHTNOW\n' 
 end_point_cloud_marker = 'POINTCLOUDENDINGRIGHTNOW\n'
 
-backlog = ''
 
-while True:
+@UDPhandle(port=11112, start_delim=begin_point_cloud_marker, end_delim=end_point_cloud_marker)
+def handle_pkt(pkt=None):
+    print "PKT start"	
+    print len(pkt)
+    point_cloud_vals = array.array('f')
+    point_cloud_vals.fromstring(str(pkt)[0:-1])
+    point_cloud_vals.byteswap()
+    timestamp = point_cloud_vals[0]
+    point_cloud_vals = point_cloud_vals[1:]
+    if len(point_cloud_vals)>1:
+        point_cloud_vals = [float(p) for p in point_cloud_vals]
+        msg = PointCloud()
+        msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
+        msg.header.frame_id = 'depth_camera'
+        for i in range(0,len(point_cloud_vals)-2,3):
+            msg.points.append(Point32(y=point_cloud_vals[i], z=point_cloud_vals[i+1], x=point_cloud_vals[i+2]))
+        
+        pub_point_cloud.publish(msg)
+    print "timestamp", timestamp
+    print "num vals ", len(point_cloud_vals)/3
+    print "bytes in pc message ", len(pkt)
 
-    data = sock.recv(65535)
-    
-    if not data:
-        continue
-
-    #add it to the to-be-processed data
-    backlog += data
-    
-    #Mark that there might be pictures in `backlog`
-    pointcloud_remain = True
-
-    #Loop to search backlog for pictures
-    while pointcloud_remain:
-	#Grab pcloud, and optimize buffer on data absent
-	pcloud_begin_loc = backlog.find(begin_point_cloud_marker)
-
-	if pcloud_begin_loc == -1:
-	    pointcloud_remain = False
-	    break
-	
-	backlog = backlog[pcloud_begin_loc:]
-	pcloud_end_loc = backlog.find(end_point_cloud_marker)
-
-	if pcloud_end_loc == -1:
-	    pointcloud_remain = False
-	    break
-
-        point_cloud = backlog[len(begin_point_cloud_marker):pcloud_end_loc]
- 	backlog = backlog[pcloud_end_loc+len(end_point_cloud_marker):]
-	
-	print len(point_cloud)
-        point_cloud_vals = array.array('f')
-        point_cloud_vals.fromstring(point_cloud[0:-1])
-        point_cloud_vals.byteswap()
-        timestamp = point_cloud_vals[0]
-        point_cloud_vals = point_cloud_vals[1:]
-        if len(point_cloud_vals)>1:
-            point_cloud_vals = [float(p) for p in point_cloud_vals]
-            msg = PointCloud()
-            msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
-            msg.header.frame_id = 'depth_camera'
-            for i in range(0,len(point_cloud_vals)-2,3):
-                msg.points.append(Point32(y=point_cloud_vals[i], z=point_cloud_vals[i+1], x=point_cloud_vals[i+2]))
-            
-	    pub_point_cloud.publish(msg)
-        print "timestamp", timestamp
-        print "num vals ", len(point_cloud_vals)/3
-        print "bytes in pc message ", len(point_cloud)
-
-	
+handle_pkt()
