@@ -15,6 +15,7 @@
  */
 
 package com.projecttango.experiments.nativehellotango;
+import android.os.IBinder;
 
 /**
  * Interfaces between C and Java.
@@ -24,7 +25,7 @@ public class TangoJNINative {
     System.loadLibrary("hello_tango_jni_example");
   }
 
-  public static native void initialize(HelloTangoActivity activity);
+  public static native void setBinder(IBinder service);
 
   public static native void setupConfig();
 
