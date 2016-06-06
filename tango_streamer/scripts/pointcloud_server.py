@@ -32,13 +32,15 @@ end_point_cloud_marker = 'POINTCLOUDENDINGRIGHTNOW\n'
 
 @UDPhandle(port=11112, start_delim=begin_point_cloud_marker, end_delim=end_point_cloud_marker)
 def handle_pkt(pkt=None):
-    print "PKT start"	
+
+    global pub_point_cloud	
+
     print len(pkt)
     point_cloud_vals = array.array('f')
-    point_cloud_vals.fromstring(str(pkt)[0:-1])
+    point_cloud_vals.fromstring(pkt[0:])
     point_cloud_vals.byteswap()
     timestamp = point_cloud_vals[0]
-    point_cloud_vals = point_cloud_vals[1:]
+    point_cloud_vals = point_cloud_vals[1:-1]
     if len(point_cloud_vals)>1:
         point_cloud_vals = [float(p) for p in point_cloud_vals]
         msg = PointCloud()
