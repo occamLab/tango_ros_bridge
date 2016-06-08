@@ -230,18 +230,6 @@ public class HelloTangoActivity extends Activity {
                 }
             });
 
-  public void toggleConnectionStatus(View v) {
-    if (!connected) {
-      EditText mEdit   = (EditText)findViewById(R.id.editText1);
-      hostName = mEdit.getText().toString();
-      System.out.println("button clic ked!! " + mEdit.getText().toString());
-      preferencesEditor.putString("ROS_HOST",hostName);
-      preferencesEditor.commit();
-      new AsyncTask<Void, Integer, Void>(){
-        @Override
-        protected Void doInBackground(Void... arg0) {
-          try  {
-            System.out.println("button CREATED  SOCKET! 1");
 
             pointCloudThread = new Thread(new Runnable() {
                 public void run() {
@@ -498,24 +486,6 @@ public class HelloTangoActivity extends Activity {
         }
     };
 
-        intrinsicsFisheyeThread = new Thread(new Runnable() {
-          public void run() {
-            while (true) {
-              double[] currIntrinsics = TangoJNINative.returnIntrinsicsFisheye();
-              if (connected) {
-                outIntrinsicsFisheye.println("INTRINSICSSTARTINGRIGHTNOW");
-                String intrinsicsAsString = Arrays.toString(currIntrinsics);
-                outIntrinsicsFisheye.println(intrinsicsAsString.substring(1,intrinsicsAsString.length() - 1));
-                outIntrinsicsFisheye.println("INTRINSICSENDINGRIGHTNOW");
-              }
-              try {
-                Thread.sleep(1000);
-              } catch (InterruptedException ex) {
-                System.err.println("Something weird happened");
-              }
-            }
-          }
-        });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -560,18 +530,6 @@ public class HelloTangoActivity extends Activity {
                     }
                     return null;
                 }
-                System.out.println("pcAs WROTE TO SOCKET!");
-                outPointCloud.println();
-                outPointCloud.println("POINTCLOUDENDINGRIGHTNOW");
-              }
-              try {
-                Thread.sleep(1000);
-              } catch (InterruptedException ex) {
-                System.err.println("Something weird happened");
-              }
-            }
-          }
-        });
 
                 @Override
                 protected void onPostExecute(Void result) {
@@ -598,16 +556,6 @@ public class HelloTangoActivity extends Activity {
                     }
                     return null;
                 }
-              });
-              try {
-                // this is pretty damn fast... would be nice to have some flow control
-                Thread.sleep(30);
-              } catch (InterruptedException ex) {
-                // System.err.println("Something weird happened");
-              }
-            }
-          }
-        });
 
                 @Override
                 protected void onPostExecute(Void result) {
@@ -617,16 +565,6 @@ public class HelloTangoActivity extends Activity {
                         ((Button) findViewById(R.id.button1)).setText("Connect");
                     }
                 }
-              }
-              try {
-                // this is pretty damn fast... would be nice to have some flow control
-                Thread.sleep(30);
-              } catch (InterruptedException ex) {
-                // System.err.println("Something weird happened");
-              }
-            }
-          }
-        });
 
                 @Override
                 protected void onPreExecute() {
@@ -659,5 +597,4 @@ public class HelloTangoActivity extends Activity {
         TangoJNINative.disconnect();
         unbindService(mTangoServiceConnection);
     }
-  }
 }
