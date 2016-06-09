@@ -46,4 +46,6 @@
 	<param name="camera_name" value="color_camera"/>
 </node>
 
+<node pkg="tango_streamer" type="rssi_server.py" name="RSSI"/>
+
 </launch>
