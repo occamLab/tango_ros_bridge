@@ -2,7 +2,7 @@
 
 from udp import UDPhandle
 import rospy
-from std_msgs.msg import String, Float64
+from std_msgs.msg import String, Float64, Header
 from tango_streamer.msg import Rf_stamped
 
 ts = 0
@@ -26,7 +26,7 @@ end_delim = "RSSIEND\n"
 @UDPhandle(port=port, start_delim=start_delim, end_delim=end_delim)
 def handle_pkt(pkt=None):
     global ts
-    out = Rf_stamped(header=Header(stamp=rospy.Time.now() + ts, frame_id="device"), data=str(pkt))
+    out = Rf_stamped(header=Header(stamp=rospy.Time(rospy.get_time() + ts), frame_id="device"), data=str(pkt))
     pub.publish(out)
 
 handle_pkt()
