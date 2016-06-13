@@ -9,8 +9,10 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   image_transport
   roscpp
-  camera_info_manager
+  rospy
+  std_msgs
   message_generation
+  camera_info_manager
 )
 
 ## System dependencies are found with CMake's conventions
@@ -48,9 +50,9 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## Generate messages in the 'msg' folder
 add_message_files(
+  DIRECTORY msg
   FILES
   Rf_stamped.msg
- # Message2.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -68,10 +70,11 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   geometry_msgs#   sensor_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  geometry_msgs
+  std_msgs
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -83,10 +86,10 @@ add_message_files(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES tango_streamer
-  CATKIN_DEPENDS message_runtime #geometry_msgs sensor_msgs
-#  DEPENDS system_lib
+  CATKIN_DEPENDS
+  message_runtime
+  geometry_msgs
+  sensor_msgs
 )
 
 ###########
