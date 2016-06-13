@@ -37,7 +37,7 @@ def handle_pkt(pkt=None):
 
     print len(pkt)
     point_cloud_vals = array.array('f')
-    point_cloud_vals.fromstring(pkt[0:])
+    point_cloud_vals.fromstring(pkt[:4*(len(pkt)//4)])
     point_cloud_vals.byteswap()
     timestamp = point_cloud_vals[0]
     point_cloud_vals = point_cloud_vals[1:-1]
