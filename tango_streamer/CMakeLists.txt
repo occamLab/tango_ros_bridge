@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   message_generation
   camera_info_manager
+  cv_bridge
 )
 
 ## System dependencies are found with CMake's conventions
@@ -113,6 +114,9 @@ include_directories(
 
 add_executable(camera_node src/camera_node.cpp)
 target_link_libraries(camera_node ${catkin_LIBRARIES})
+
+add_executable(undistort_fisheye src/undistort_fisheye.cpp)
+target_link_libraries(undistort_fisheye ${catkin_LIBRARIES})
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
