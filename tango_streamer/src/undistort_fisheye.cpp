@@ -194,7 +194,7 @@ int main(int argc, char** argv)
   ros::Publisher pub_2 = nh.advertise<sensor_msgs::CameraInfo>("/fisheye_undistorted/camera_info", 10);
   pub_info = &pub_2;
 
-  ros::Rate r(1);
+  ros::Rate r(50);
   while (nh.ok()) {
     std::cout << "make sure images are not being updated while sending" << std::endl;
     ros::spinOnce();
