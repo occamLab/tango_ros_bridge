@@ -33,6 +33,15 @@
         android:layout_toRightOf="@+id/editText1"
         android:text="Connect"
         android:onClick="toggleConnectionStatus"/>
+
+    <CheckBox
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="scan Wifi RSSI"
+        android:id="@+id/checkBox"
+        android:onClick="toggleWifiScanStatus"
+        android:checked="true" />
+
     <ImageView
         android:id="@+id/test_image"
         android:layout_width="wrap_content"

@@ -26,6 +26,7 @@ import java.io.BufferedReader;
 import java.nio.ByteBuffer;
 
 import android.net.wifi.WifiManager;
+import android.os.SystemClock;
 import android.net.wifi.ScanResult;
 import android.graphics.Bitmap;
 import android.content.BroadcastReceiver;
@@ -41,6 +42,7 @@ import android.os.AsyncTask;
 import android.widget.ImageView;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.CheckBox;
 import android.view.View;
 import android.widget.Toast;
 import android.graphics.Color;
@@ -77,7 +79,7 @@ public class HelloTangoActivity extends Activity {
     private SharedPreferences preferences;
     private SharedPreferences.Editor preferencesEditor;
 
-    private boolean scanWifi = false;
+    private boolean scanWifi = true;
 
     private boolean connected = false;
     private String hostName = "";
@@ -122,16 +124,32 @@ public class HelloTangoActivity extends Activity {
         @Override
         public void onReceive(Context arg0, Intent arg1) {
             WifiManager wifiMan = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-
+            System.out.println("Is Scan always available? " + wifiMan.isScanAlwaysAvailable());
             if (udpWIFIScan != null && remote != null && scanPacket == null) {
                 ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
                 List<ScanResult> detected_aps = wifiMan.getScanResults();
-                System.out.println("RSSI: about to create message");
+                // it appears that the Tango clock is the same as SystemClock.elapsedRealTimeNanos()/1e9
+                double[] currPose = TangoJNINative.returnPoseArray();
+                // we have no way to query the current Tango time, so instead we use the time of the last available pose
+                // SystemClock.elapsedRealtimeNanos() is almost correct, but not quite
+                //double scanTimestamp = SystemClock.elapsedRealtimeNanos()/(float)1e9;
+                double scanTimestamp = currPose[7];
+                System.out.println("RSSI: about to create message " + scanTimestamp + " " + currPose[7]);
+                double timeThreshold = 0.2;         // don't send any measurements that are 0.2 seconds older than the most recent reading
+                double mostRecentDetection = 0.0;
+                for (int i = 0; i < detected_aps.size(); i++) {
+                    if (detected_aps.get(i).timestamp / ((float)1e6) > mostRecentDetection) {
+                        mostRecentDetection = detected_aps.get(i).timestamp/((float)1e6);
+                    }
+                }
                 try {
                     udpPayload.write("RSSISTART\n".getBytes());
+                    udpPayload.write(("RSSISCANTIMESTART" + scanTimestamp + "RSSISCANTIMEEND").getBytes());
                     for (int i = 0; i < detected_aps.size(); i++) {
-                        System.out.println("RSSI: serializing BSSID" + i);
-                        udpPayload.write(("BSSID " + detected_aps.get(i).BSSID + " " + detected_aps.get(i).level + "\n").getBytes());
+                        float apTimeStamp = detected_aps.get(i).timestamp / (float)1e6;
+                        if (mostRecentDetection - apTimeStamp < timeThreshold) {
+                            udpPayload.write(("BSSID " + detected_aps.get(i).BSSID + " " + detected_aps.get(i).level + "\n").getBytes());
+                        }
                     }
                     udpPayload.write("RSSIEND\n".getBytes());
                     byte[] payload = udpPayload.toByteArray();
@@ -141,7 +159,10 @@ public class HelloTangoActivity extends Activity {
                 }
                 System.out.println("RSSI: received scan");
             }
-            wifiMan.startScan();
+            if (scanWifi) {
+                System.out.println("RSSI: restarting scan");
+                wifiMan.startScan();
+            }
         }
     };
 
@@ -310,7 +331,7 @@ public class HelloTangoActivity extends Activity {
                                     String frameTimeStampAsString = String.valueOf(frameTimeStamp);
                                     udpPayload.write((frameTimeStampAsString + "\n").getBytes());
                                     udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
-                                    bmColor.compress(Bitmap.CompressFormat.JPEG, 50, udpPayload);
+                                    bmColor.compress(Bitmap.CompressFormat.JPEG, 20, udpPayload);
                                     udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
                                     byte[] payload = udpPayload.toByteArray();
                                     udpColorImages.send(new DatagramPacket(payload, payload.length, remote, portNumberColorImages));
@@ -327,13 +348,13 @@ public class HelloTangoActivity extends Activity {
                                 image.invalidate();
                             }
                         });
-                        try {
+                       // try {
                             // throttle the speed at which we send data
                             // TODO: allow this to be configured via some sort of user interface widget
-                            Thread.sleep(100);
-                        } catch (InterruptedException ex) {
+                            //Thread.sleep(50);
+                       // } catch (InterruptedException ex) {
                             // System.err.println("Something weird happened");
-                        }
+                       // }
                     }
                 }
             });
@@ -364,13 +385,13 @@ public class HelloTangoActivity extends Activity {
                                 }
                             }
                         }
-                        try {
+                       // try {
                             // throttle the speed at which we send data
                             // TODO: allow this to be configured via some sort of user interface widget
-                            Thread.sleep(100);
-                        } catch (InterruptedException ex) {
+                            //Thread.sleep(50);
+                       // } catch (InterruptedException ex) {
                             // System.err.println("Something weird happened");
-                        }
+                       // }
                     }
                 }
             });
@@ -467,17 +488,16 @@ public class HelloTangoActivity extends Activity {
             });
             // start all of the threads
             // TODO: allow these to be turned on and off from the app
-            if (!scanWifi) {
-                poseThread.start();
-                poseAreaThread.start();
-                pointCloudThread.start();
-                intrinsicsColorThread.start();
-                intrinsicsFisheyeThread.start();
-                imagesColorThread.start();
-                imagesFisheyeThread.start();
-            } else {
+            if (scanWifi) {
                 scanThread.start();
             }
+            poseThread.start();
+            poseAreaThread.start();
+            pointCloudThread.start();
+            intrinsicsColorThread.start();
+            intrinsicsFisheyeThread.start();
+            imagesColorThread.start();
+            imagesFisheyeThread.start();
         }
 
         public void onServiceDisconnected(ComponentName name) {
@@ -506,7 +526,18 @@ public class HelloTangoActivity extends Activity {
         mEdit.setText(preferences.getString("ROS_HOST", ""));
     }
 
-    public void toggleConnectionStatus(View v) {
+    public void toggleWifiScanStatus(View v) {
+        boolean isChecked = ((CheckBox) findViewById(R.id.checkBox)).isChecked();
+        if (isChecked) {
+            // need to kick this off again
+            WifiManager wifiMan = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+            wifiMan.startScan();
+        }
+        scanWifi = isChecked;
+        System.out.println("Changing RSSI status");
+    }
+
+        public void toggleConnectionStatus(View v) {
         if (!connected) {
             EditText mEdit = (EditText) findViewById(R.id.editText1);
             hostName = mEdit.getText().toString();
@@ -582,6 +613,7 @@ public class HelloTangoActivity extends Activity {
             this.registerReceiver(myRssiChangeReceiver, rssiFilter);
             System.out.println("RSSI: requesting scan");
             WifiManager wifiMan= (WifiManager)getSystemService(Context.WIFI_SERVICE);
+            wifiMan.createWifiLock(WifiManager.WIFI_MODE_SCAN_ONLY, "tango_wifi_lock" );
             wifiMan.startScan();
         }
     }

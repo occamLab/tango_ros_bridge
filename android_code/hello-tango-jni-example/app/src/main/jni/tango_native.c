@@ -225,12 +225,22 @@ static void onXYZijAvailable(void* context, const TangoXYZij* XYZ_ij) {
 }
 
 static void onPoseAvailable(void* context, const TangoPoseData* pose) {
+//    TangoPoseData depthCameraPose;
+//    TangoCoordinateFramePair deviceToDepthCam;
+//    deviceToDepthCam.base = TANGO_COORDINATE_FRAME_DEVICE;
+//    deviceToDepthCam.target =  TANGO_COORDINATE_FRAME_CAMERA_DEPTH;
+//
+//	TangoService_getPoseAtTime(pose->timestamp, deviceToDepthCam, &depthCameraPose);
+//	LOGI("DepthCam Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
+//		 depthCameraPose.translation[0], depthCameraPose.translation[1], depthCameraPose.translation[2],
+//		 depthCameraPose.orientation[0], depthCameraPose.orientation[2], depthCameraPose.orientation[3],
+//		 depthCameraPose.orientation[3], depthCameraPose.timestamp);
 	if (pose->frame.base == TANGO_COORDINATE_FRAME_START_OF_SERVICE &&
 		pose->frame.target == TANGO_COORDINATE_FRAME_DEVICE) {
-		LOGI("Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
+		LOGI("Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
 		       pose->translation[0], pose->translation[1], pose->translation[2],
 		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3]);
+		       pose->orientation[3], pose->timestamp);
 		poseBuffer[0] = pose->translation[0];
 		poseBuffer[1] = pose->translation[1];
 		poseBuffer[2] = pose->translation[2];
@@ -241,6 +251,7 @@ static void onPoseAvailable(void* context, const TangoPoseData* pose) {
 		poseBuffer[7] = pose->timestamp; // the last is the time
 		poseBuffer[8] = pose->status_code;
 		LOGI("features %f,%f,%f", pose->timestamp, lastFeatureTrackingErrorTimeStamp, fabs(pose->timestamp - lastFeatureTrackingErrorTimeStamp));
+		// TODO: might need to communicate this independently of the pose (in case callbacks stop happening)
 		if (fabs(pose->timestamp - lastFeatureTrackingErrorTimeStamp) < 1.0) {
 			poseBuffer[9] = features_tracked;
 		} else {
@@ -252,10 +263,10 @@ static void onPoseAvailable(void* context, const TangoPoseData* pose) {
 		       pose->orientation[3]);
 	} else if (pose->frame.base == TANGO_COORDINATE_FRAME_AREA_DESCRIPTION &&
 				pose->frame.target == TANGO_COORDINATE_FRAME_DEVICE) {
-		LOGI("Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
+		LOGI("Area Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f, Timestamp: %f",
 		       pose->translation[0], pose->translation[1], pose->translation[2],
 		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3]);
+		       pose->orientation[3], pose->timestamp);
 		poseBufferArea[0] = pose->translation[0];
 		poseBufferArea[1] = pose->translation[1];
 		poseBufferArea[2] = pose->translation[2];
