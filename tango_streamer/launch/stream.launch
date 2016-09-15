@@ -1,23 +1,13 @@
 <launch>
+
 <node pkg="tango_streamer" type="image_server.py" name="image_server_color">
    <param name="port_number" value="11111" type="int"/>
    <param name="camera_name" value="color_camera"/>
 </node>
+
 <node pkg="tango_streamer" type="image_server.py" name="image_server_fisheye">
    <param name="port_number" value="11115" type="int"/>
    <param name="camera_name" value="fisheye_camera"/>
-</node>
-
-<node pkg="tango_streamer" type="pose_server.py" name="pose_server">
-   <param name="port_number" value="11113" type="int"/>
-   <param name="pose_topic" value="tango_pose"/>
-   <param name="coordinate_frame" value="odom"/>
-</node>
-
-<node pkg="tango_streamer" type="pose_area_server.py" name="pose_server_area"  output="screen">
-   <param name="port_number" value="11117" type="int"/>
-   <param name="pose_topic" value="tango_area_pose"/>
-   <param name="coordinate_frame" value="area_learning"/>
 </node>
 
 <node pkg="tango_streamer" type="intrinsics_server.py" name="intrinsics_server_color">
@@ -31,25 +21,17 @@
 </node>
 
 <node pkg="tango_streamer" type="pointcloud_server.py" name="pointcloud_server"/>
-<!-- obtained from Tango API -->
-<node pkg="tf" type="static_transform_publisher" name="device_to_depth_cam" args="0 0 0 0 0.279 0 device depth_camera 10"/>
 
-
-<!--
-hand calibrated from a closeup of a wall:
-<node pkg="tf" type="static_transform_publisher" name="device_to_depth_cam" args="0 0 0 0 0.307 0 device depth_camera 10"/>
-
-legacy:
-<node pkg="tf" type="static_transform_publisher" name="device_to_depth_cam" args="0 0 0 0 0.24 0 device depth_camera 10"/> -->
-<node pkg="tf" type="static_transform_publisher" name="fisheye_to_depth_cam" args="0 -0.05 0 0 0 0 depth_camera fisheye_camera 10"/>
+<node pkg="tango_streamer" type="pose_server.py" name="pose_server" output="screen">
+   <param name="port_number" value="11113" type="int"/>
+   <param name="pose_topic" value="tango_pose"/>
+   <param name="coordinate_frame" value="odom"/>
+</node>
 
 <node pkg="image_transport" type="republish" name="decompress_fisheye" args="in:=fisheye_camera/image_raw compressed out:=fisheye_camera/image_raw raw"/>
-
 <node pkg="image_transport" type="republish" name="decompress_color" args="in:=color_camera/image_raw compressed out:=color_camera/image_raw raw"/>
-
 <node pkg="tango_streamer" type="rssi_server.py" name="RSSI"/>
 <node pkg="tango_streamer" type="undistort_fisheye" name="undistort_fisheye">
   <param name="camera_name" value="fisheye_camera"/>
 </node>
-
 </launch>

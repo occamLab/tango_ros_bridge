@@ -9,8 +9,9 @@ from sensor_msgs.msg import CompressedImage, PointCloud
 from geometry_msgs.msg import PoseStamped, Point32
 from std_msgs.msg import Float64, Float64MultiArray, String, Int32
 import sys
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from tf.transformations import *
 from math import pi
+import numpy as np
 import tf
 
 """ Keeps track of whether we have a valid clock offset between
@@ -21,6 +22,7 @@ tango_clock_valid = False
 tango_clock_offset = -1.0
 
 rospy.init_node("pose_server")
+last_timestamp = rospy.Time.now()
 
 port = rospy.get_param('~port_number')
 pose_topic = rospy.get_param('~pose_topic')
@@ -37,28 +39,36 @@ end_pose_marker = 'POSEENDINGRIGHTNOW\n'
 
 br = tf.TransformBroadcaster()
 
-@UDPhandle(port=port, start_delim=begin_pose_marker, end_delim=end_pose_marker)
-def handle_pkt(pkt=None):
-	
+def get_inverse_transform(quat, trans):
+    A = quaternion_matrix(quat)
+    A[:-1,-1] = trans
+    Ainv = np.linalg.inv(A)
+    pose_vals_inverse = np.hstack((Ainv[:-1,-1], quaternion_from_matrix(Ainv)));
+    return pose_vals_inverse[0:3], pose_vals_inverse[3:]
+
+def handle_pose(pose_vals):
     global br
     global tango_clock_valid
     global tango_clock_offset
-
-    pose_vals = pkt.split(",")
+    global last_timestamp
     tango_timestamp = pose_vals[-3]
     tango_status_code = pose_vals[-2]
-    features_tracked = int(float(pose_vals[-1]))
-    print features_tracked
-    if features_tracked != -1:
-        pub_feature_track_status.publish(Int32(features_tracked))
+    print tango_status_code
+    # features_tracked = int(float(pose_vals[-1]))
+    # if features_tracked != -1:
+    #     pub_feature_track_status.publish(Int32(features_tracked))
     
     sc = int(float(tango_status_code))
     status_code_to_msg = ['TANGO_POSE_INITIALIZING','TANGO_POSE_VALID','TANGO_POSE_INVALID','TANGO_POSE_UNKNOWN']
     pub_pose_status.publish(String(status_code_to_msg[sc]))
-    print "published successfully!"
-    pose_vals = pose_vals[0:-3]
+    pose_vals = [float(p) for p in pose_vals[0:-3]]
     
+    if status_code_to_msg[sc] != 'TANGO_POSE_VALID':
+        return
+
     ROS_timestamp = rospy.Time.now()
+    print "new offset",  ROS_timestamp.to_time() - float(tango_timestamp)
+
     if not(tango_clock_valid):
         tango_clock_offset = ROS_timestamp.to_time() - float(tango_timestamp)
         tango_clock_valid = True
@@ -66,41 +76,70 @@ def handle_pkt(pkt=None):
     pub_clock.publish(tango_clock_offset)
     
     msg = PoseStamped()
-    # might need to revisit time stamps
     msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
     msg.header.frame_id = coordinate_frame
-    
-    msg.pose.position.x = float(pose_vals[0])
-    msg.pose.position.y = float(pose_vals[1])
-    msg.pose.position.z = float(pose_vals[2])
-    
-    # two of the rotation axes seem to be off...
-    # we are fixing this in a hacky way right now
-    euler_angles = euler_from_quaternion(pose_vals[3:])
-    pose_vals[3:] = quaternion_from_euler(euler_angles[1],
-                                          euler_angles[0]+pi/2, # this is right
-                                          euler_angles[2]-pi/2)
-    euler_angles_transformed = euler_from_quaternion(pose_vals[3:])
-    msg2 = Float64MultiArray(data=euler_angles_transformed)
-    pub_angles.publish(msg2)
-    
-    msg.pose.orientation.x = float(pose_vals[3])
-    msg.pose.orientation.y = float(pose_vals[4])
-    msg.pose.orientation.z = float(pose_vals[5])
-    msg.pose.orientation.w = float(pose_vals[6])
-    
-    euler_angles_depth_camera = (euler_angles_transformed[0],
-                                 euler_angles_transformed[1],
-                                 euler_angles_transformed[2])
-    pub_pose.publish(msg)
-    br.sendTransform((msg.pose.position.x,
-                      msg.pose.position.y,
-                      msg.pose.position.z),
-                     quaternion_from_euler(euler_angles_depth_camera[0],
-                                           euler_angles_depth_camera[1],
-                                           euler_angles_depth_camera[2]),
-                     rospy.Time(tango_clock_offset + float(tango_timestamp)),
-                     "device",          # this should be something different like "device"
+
+    # convert from start of service coordinate system to ROS (https://developers.google.com/tango/apis/c/reference/struct/tango-x-y-zij#xyz) to ROS coordinate system conventions
+    # new x axis is the old y-axis, new y-axis is the negative x-axis
+    # new roll is the old pitch, new pitch is negative of the old roll
+    msg.pose.position.x = pose_vals[1]
+    msg.pose.position.y = -pose_vals[0]
+    msg.pose.position.z = pose_vals[2]
+
+    q_trans = [pose_vals[4], -pose_vals[3], pose_vals[5], pose_vals[6]]
+
+    msg.pose.orientation.x = q_trans[0]
+    msg.pose.orientation.y = q_trans[1]
+    msg.pose.orientation.z = q_trans[2]
+    msg.pose.orientation.w = q_trans[3]
+
+    delta_t = (msg.header.stamp - last_timestamp).to_sec()
+    if delta_t < .01 or delta_t > .03:
+        print delta_t, float(tango_timestamp)
+    last_timestamp = msg.header.stamp
+
+    br.sendTransform([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z],
+                     [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w],
+                     msg.header.stamp,
+                     "device_ros",
                      coordinate_frame)
+
+    # publish static transform
+    br.sendTransform([-0.052506376 , -0.0077469592,  0.0075513193],
+                     [  4.1631350369e-03,  -8.2141334410e-04,  -5.2960722061e-03, 9.9997697234e-01],
+                     msg.header.stamp,      # use the same time stamp as the pose update
+                     "fisheye_camera",
+                     "depth_camera")
+
+    br.sendTransform([ 0.0612489982, -0.0012502772,  0.0025526363],
+                     [ 0.9899618129, -0.0019678283, -0.0044808391, -0.1412503409],
+                     msg.header.stamp,      # use the same time stamp as the pose update
+                     "depth_camera",
+                     "device")
+    br.sendTransform([ 0.0, 0.0, 0.0 ],
+                     [ 0.          ,  0.          , -0.7071066662,  0.7071068962],
+                     msg.header.stamp,      # use the same time stamp as the pose update
+                     "device",
+                     "device_ros")
+
+    # the pose currently represents the wrong axis, rotate so that it is the x-axis
+    q_trans = quaternion_multiply(q_trans, quaternion_about_axis(pi/2, [0, 1, 0]))
+    msg.pose.orientation.x = q_trans[0]
+    msg.pose.orientation.y = q_trans[1]
+    msg.pose.orientation.z = q_trans[2]
+    msg.pose.orientation.w = q_trans[3]
+    pub_pose.publish(msg)
+
+
+@UDPhandle(port=port, start_delim=begin_pose_marker, end_delim=end_pose_marker)
+def handle_pkt(pkt=None):
+    doubles_per_pose = 10
+
+    print pkt
+    pose_vals = pkt.split(",")
+    for i in range(0, len(pose_vals), doubles_per_pose):
+        handle_pose(pose_vals[i:i+doubles_per_pose])
+    print len(pose_vals)
+
     
 handle_pkt()

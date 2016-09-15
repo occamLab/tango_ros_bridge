@@ -18,7 +18,8 @@ import sys
 tango_clock_offset = 0
 
 def handle_tango_clock(msg):
-        global tango_clock_offset
+    global tango_clock_offset
+    if tango_clock_offset == 0:
         tango_clock_offset = msg.data
 
 clock_sub = rospy.Subscriber('/tango_clock', Float64, handle_tango_clock)
@@ -32,7 +33,6 @@ end_point_cloud_marker = 'POINTCLOUDENDINGRIGHTNOW\n'
 
 @UDPhandle(port=11112, start_delim=begin_point_cloud_marker, end_delim=end_point_cloud_marker)
 def handle_pkt(pkt=None):
-
     global pub_point_cloud	
 
     print len(pkt)
@@ -40,15 +40,17 @@ def handle_pkt(pkt=None):
     point_cloud_vals.fromstring(pkt[:4*(len(pkt)//4)])
     point_cloud_vals.byteswap()
     timestamp = point_cloud_vals[0]
-    point_cloud_vals = point_cloud_vals[1:-1]
+    point_cloud_vals = point_cloud_vals[1:]
     if len(point_cloud_vals)>1:
         point_cloud_vals = [float(p) for p in point_cloud_vals]
         msg = PointCloud()
+        print tango_clock_offset
         msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
+        print "point cloud age", (rospy.Time.now() - msg.header.stamp).to_sec()
+        #msg.header.frame_id = 'odom'
         msg.header.frame_id = 'depth_camera'
         for i in range(0,len(point_cloud_vals)-2,3):
-            msg.points.append(Point32(y=point_cloud_vals[i], z=point_cloud_vals[i+1], x=point_cloud_vals[i+2]))
-        
+            msg.points.append(Point32(x=point_cloud_vals[i], y=point_cloud_vals[i+1], z=point_cloud_vals[i+2]))
         pub_point_cloud.publish(msg)
     print "timestamp", timestamp
     print "num vals ", len(point_cloud_vals)/3
