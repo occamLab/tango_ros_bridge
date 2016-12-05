@@ -35,7 +35,6 @@ end_point_cloud_marker = 'POINTCLOUDENDINGRIGHTNOW\n'
 def handle_pkt(pkt=None):
     global pub_point_cloud	
 
-    print len(pkt)
     point_cloud_vals = array.array('f')
     point_cloud_vals.fromstring(pkt[:4*(len(pkt)//4)])
     point_cloud_vals.byteswap()
@@ -44,16 +43,13 @@ def handle_pkt(pkt=None):
     if len(point_cloud_vals)>1:
         point_cloud_vals = [float(p) for p in point_cloud_vals]
         msg = PointCloud()
-        print tango_clock_offset
         msg.header.stamp = rospy.Time(tango_clock_offset + float(timestamp))
-        print "point cloud age", (rospy.Time.now() - msg.header.stamp).to_sec()
-        #msg.header.frame_id = 'odom'
         msg.header.frame_id = 'depth_camera'
-        for i in range(0,len(point_cloud_vals)-2,3):
+        for i in range(0,len(point_cloud_vals)-3,4):
+            if abs(point_cloud_vals[i]) < 10**-5 or abs(point_cloud_vals[i+1]) < 10**-5 or abs(point_cloud_vals[i+2]) < 10**-5:
+                continue
+            # note we are currently ignoring the confidence value
             msg.points.append(Point32(x=point_cloud_vals[i], y=point_cloud_vals[i+1], z=point_cloud_vals[i+2]))
         pub_point_cloud.publish(msg)
-    print "timestamp", timestamp
-    print "num vals ", len(point_cloud_vals)/3
-    print "bytes in pc message ", len(pkt)
 
 handle_pkt()

@@ -20,9 +20,9 @@
    <param name="camera_name" value="fisheye_camera"/>
 </node>
 
-<node pkg="tango_streamer" type="pointcloud_server.py" name="pointcloud_server"/>
+<node pkg="tango_streamer" type="pointcloud_server.py" name="pointcloud_server" output="screen"/>
 
-<node pkg="tango_streamer" type="pose_server.py" name="pose_server" output="screen">
+<node pkg="tango_streamer" type="pose_server.py" name="pose_server">
    <param name="port_number" value="11113" type="int"/>
    <param name="pose_topic" value="tango_pose"/>
    <param name="coordinate_frame" value="odom"/>

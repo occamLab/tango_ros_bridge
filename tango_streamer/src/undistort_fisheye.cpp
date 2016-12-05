@@ -73,16 +73,13 @@ void tangoInitUndistortRectifyMap(vector<double> K,
             double x = scale_factor*(_x/_w - c[0]), y = scale_factor*(_y/_w-c[1]);
             double X = x / f[0];
             double Y = y / f[1];
+
             // the Tango uses normalized radial distances instead
             double r = sqrt(X*X + Y*Y);
             double theta_d =  1.0 / D * atan(2 * r * tan(D / 2));
             double scale = (r == 0) ? 1.0 : theta_d / r;
-            //std::cout << "scale " << scale << std::endl;
-            //double u = f[0]*x*scale + c[0];
-            //double v = f[1]*y*scale + c[1];
             double u = x*scale + c[0];
             double v = y*scale + c[1];
-            //std::cout << "(x,y)" << x << ", " << y << " (u,v) " << u <<", " << v <<std::endl;
 
             if( m1type == CV_16SC2 )
             {
@@ -155,13 +152,12 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg) {
     cam_info.K[5] = info_vec[3];
     cam_info.K[8] = 1.0;
 
-
     cam_info.P[0] = info_vec[0] / scale_factor;
     cam_info.P[2] = info_vec[1];
     cam_info.P[5] = info_vec[2] / scale_factor;
     cam_info.P[6] = info_vec[3];
     cam_info.P[10] = 1.0;
-
+    
     cam_info.header = msg->header;
 
     pub_info->publish(cam_info);

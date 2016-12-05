@@ -62,6 +62,7 @@ def handle_pose(pose_vals):
     status_code_to_msg = ['TANGO_POSE_INITIALIZING','TANGO_POSE_VALID','TANGO_POSE_INVALID','TANGO_POSE_UNKNOWN']
     pub_pose_status.publish(String(status_code_to_msg[sc]))
     pose_vals = [float(p) for p in pose_vals[0:-3]]
+    print "received a pose", pose_vals
     
     if status_code_to_msg[sc] != 'TANGO_POSE_VALID':
         return
@@ -97,25 +98,35 @@ def handle_pose(pose_vals):
     if delta_t < .01 or delta_t > .03:
         print delta_t, float(tango_timestamp)
     last_timestamp = msg.header.stamp
+    device = "Phab2Pro"
+    if device == 'Yosemite':
+        # publish static transform
+        br.sendTransform([-0.052506376 , -0.0077469592,  0.0075513193],
+                         [  4.1631350369e-03,  -8.2141334410e-04,  -5.2960722061e-03, 9.9997697234e-01],
+                         msg.header.stamp,      # use the same time stamp as the pose update
+                         "fisheye_camera",
+                         "depth_camera")
 
-    br.sendTransform([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z],
-                     [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w],
-                     msg.header.stamp,
-                     "device_ros",
-                     coordinate_frame)
+        br.sendTransform([ 0.0612489982, -0.0012502772,  0.0025526363],
+                         [ 0.9899618129, -0.0019678283, -0.0044808391, -0.1412503409],
+                         msg.header.stamp,      # use the same time stamp as the pose update
+                         "depth_camera",
+                         "device")
+    else:
+        # assume we are using the Phab2 pro
+        # publish static transform
+        br.sendTransform([-0.038881, 0.000087, 0.001398],
+                         [-0.003793, 0.003856, 0.005584, -0.999970],
+                         msg.header.stamp,      # use the same time stamp as the pose update
+                         "fisheye_camera",
+                         "depth_camera")
 
-    # publish static transform
-    br.sendTransform([-0.052506376 , -0.0077469592,  0.0075513193],
-                     [  4.1631350369e-03,  -8.2141334410e-04,  -5.2960722061e-03, 9.9997697234e-01],
-                     msg.header.stamp,      # use the same time stamp as the pose update
-                     "fisheye_camera",
-                     "depth_camera")
-
-    br.sendTransform([ 0.0612489982, -0.0012502772,  0.0025526363],
-                     [ 0.9899618129, -0.0019678283, -0.0044808391, -0.1412503409],
-                     msg.header.stamp,      # use the same time stamp as the pose update
-                     "depth_camera",
-                     "device")
+        br.sendTransform([ 0.006841, 0.035824, -0.002991],
+                         [ -2.09300111e-03,   2.37000126e-04,  -7.14237379e-01, 6.99900371e-01],
+                         msg.header.stamp,      # use the same time stamp as the pose update
+                         "depth_camera",
+                             "device")
+    # TODO: could transform directly to real_device and remove device_ros
     br.sendTransform([ 0.0, 0.0, 0.0 ],
                      [ 0.          ,  0.          , -0.7071066662,  0.7071068962],
                      msg.header.stamp,      # use the same time stamp as the pose update
@@ -128,6 +139,19 @@ def handle_pose(pose_vals):
     msg.pose.orientation.y = q_trans[1]
     msg.pose.orientation.z = q_trans[2]
     msg.pose.orientation.w = q_trans[3]
+
+    br.sendTransform([0.0, 0.0, 0.0],
+                     quaternion_about_axis(pi/2, [0, 1, 0]),
+                     msg.header.stamp,
+                     "device_ros",
+                     "real_device")
+
+    br.sendTransform([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z],
+                     [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w],
+                     msg.header.stamp,
+                     "real_device",
+                     coordinate_frame)
+
     pub_pose.publish(msg)
 
 
