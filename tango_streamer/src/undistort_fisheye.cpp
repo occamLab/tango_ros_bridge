@@ -25,7 +25,7 @@ void infoCallback(const sensor_msgs::CameraInfoPtr& msg) {
     }
 }
 
-void tangoInitUndistortRectifyMap(vector<double> K,
+void tangoInitUndistortRectifyMap(std::vector<double> K,
                                   double D,
                                   InputArray R,
                                   const cv::Size& size,
@@ -107,7 +107,7 @@ void tangoInitUndistortRectifyMap(vector<double> K,
 
 void undistortImage(InputArray distorted,
                     OutputArray undistorted,
-                    vector<double> K,
+                    std::vector<double> K,
                     double D,
                     const Size& new_size)
 {
