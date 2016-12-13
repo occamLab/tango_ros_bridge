@@ -3,15 +3,16 @@
 import rospy
 import numpy as np
 from geometry_msgs.msg import PointStamped, Point, Pose
-from sensor_msgs.msg import CameraInfo, PointCloud, CompressedImage
+from sensor_msgs.msg import CameraInfo, PointCloud, CompressedImage, Image
 import cv2
+from cv_bridge import CvBridge
 from std_msgs.msg import Header
 from tf import TransformListener
 from threading import Lock
 
 class DepthImageCreator(object):
-	def __init__(self, use_depth_only):
-		self.use_depth_only = use_depth_only
+	def __init__(self):
+		self.bridge = CvBridge()
 		self.depth_image_lock = Lock()
 		self.image_list_lock = Lock()
 		self.image_list = []
@@ -26,42 +27,30 @@ class DepthImageCreator(object):
 						 PointCloud,
 						 self.process_point_cloud,
 						 queue_size=10)
-		rospy.Subscriber("/color_camera/image_raw/compressed",
-						 CompressedImage,
+		rospy.Subscriber("/color_camera/image_raw",
+						 Image,
 						 self.process_image,
 						 queue_size=10)
 		self.clicked_point_pub = rospy.Publisher("/clicked_point",PointStamped,queue_size=10)
 		self.camera_info = None
-		self.P = None
 		self.depth_image = None
 		self.image = None
-		self.last_image_timestamp = None
-		self.click_timestamp = None
 		self.depth_timestamp = None
-		cv2.namedWindow("depth_feed")
-		cv2.namedWindow("image_feed")
 		cv2.namedWindow("combined_feed")
-		cv2.setMouseCallback('image_feed',self.handle_click)
 		cv2.setMouseCallback('combined_feed',self.handle_combined_click)
-
-	def handle_click(self,event,x,y,flags,param):
-		if event == cv2.EVENT_LBUTTONDOWN:
-			self.click_timestamp = self.last_image_timestamp
-			self.click_coords = (x*self.downsample_factor,y*self.downsample_factor)
 
 	def process_image(self,msg):
 		self.image_list_lock.acquire()
-		np_arr = np.fromstring(msg.data, np.uint8)
-		self.last_image_timestamp = msg.header.stamp
-		self.image = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+		self.image = self.bridge.imgmsg_to_cv2(msg)
 		if len(self.image_list) == self.image_list_max_size:
 			self.image_list.pop(0)
 		self.image_list.append((msg.header.stamp,self.image))
 		self.image_list_lock.release()
 
 	def process_camera_info(self, msg):
+		if self.camera_info != None:
+			return
 		self.camera_info = msg
-		self.P = np.array(msg.P).reshape((3,4))
 		self.K = np.array(msg.K).reshape((3,3))
 		# TODO: this is necessary due to a mistake in intrinsics_server.py
 		self.D = np.array([msg.D[0],msg.D[1],0,0,msg.D[2]])
@@ -81,18 +70,15 @@ class DepthImageCreator(object):
 			try:
 				self.depth_image_lock.acquire()
 				click_coords = (x*self.downsample_factor,y*self.downsample_factor)
-				distances = []
-				for i in range(self.projected_points.shape[0]):
-					dist = (self.projected_points[i,0,0] - click_coords[0])**2 + (self.projected_points[i,0,1] - click_coords[1])**2
-					distances.append(dist)
-				three_d_coord = self.points_3d[:,np.argmin(distances)]
+				distances = [(p[0,0] - click_coords[0])**2 + (p[0,1] - click_coords[1])**2  for p in self.projected_points]
+				three_d_coord = self.points_3d[np.argmin(distances),:]
 
 				# again, we have to reshuffle the coordinates due to differences in ROS Tango coordinate systems
 				point_msg = PointStamped(header=Header(stamp=self.depth_image_timestamp,
 													   frame_id="depth_camera"),
-										 point=Point(y=three_d_coord[0],
-												 	 z=three_d_coord[1],
-												 	 x=three_d_coord[2]))
+										 point=Point(x=three_d_coord[0],
+												 	 y=three_d_coord[1],
+												 	 z=three_d_coord[2]))
 				self.tf.waitForTransform("depth_camera",
 										 "odom",
 										 self.depth_image_timestamp,
@@ -100,100 +86,60 @@ class DepthImageCreator(object):
 				transformed_coord = self.tf.transformPoint('odom', point_msg)
 				self.clicked_point_pub.publish(transformed_coord)
 				self.depth_image_lock.release()
+
 			except Exception as ex:
 				print "Encountered an errror! ", ex
 				self.depth_image_lock.release()
 
 
 	def process_point_cloud(self, msg):
+		if self.K == None or self.D == None:
+			return
 		self.depth_image_lock.acquire()
 		try:
-			if self.P == None:
-				self.depth_image_lock.release()
-				return
 			self.depth_image_timestamp = msg.header.stamp
 			self.depth_image = np.zeros((self.camera_info.height, self.camera_info.width, 3),dtype=np.uint8)
-			self.points_3d = np.zeros((3,len(msg.points))).astype(np.float32)
-			depths = []
-			for i,p in enumerate(msg.points):
-				# this is weird due to mismatches between Tango coordinate system and ROS
-				self.points_3d[:,i] = np.array([p.y, p.z, p.x])
-				depths.append(p.x)
-			self.projected_points, dc = cv2.projectPoints(self.points_3d.T,
+			depths = [p.x for p in msg.points]
+			self.points_3d = np.asarray([[p.x, p.y, p.z] for p in msg.points], dtype=np.float32)
+			self.projected_points, dc = cv2.projectPoints(self.points_3d,
 												 		  (0,0,0),
 												 		  (0,0,0),
 												 		  self.K,
 														  self.D)
 
-			if self.click_timestamp != None and msg.header.stamp > self.click_timestamp:
-				distances = []
-				for i in range(self.projected_points.shape[0]):
-					dist = (self.projected_points[i,0,0] - self.click_coords[0])**2 + (self.projected_points[i,0,1] - self.click_coords[1])**2
-					distances.append(dist)
-				three_d_coord = self.points_3d[:,np.argmin(distances)]
-				# again, we have to reshuffle the coordinates due to differences in ROS Tango coordinate systems
-				point_msg = PointStamped(header=Header(stamp=msg.header.stamp,
-													   frame_id="depth_camera"),
-										 point=Point(y=three_d_coord[0],
-													 z=three_d_coord[1],
-													 x=three_d_coord[2]))
-				transformed_coord = self.tf.transformPoint('odom', point_msg)
-				self.clicked_point_pub.publish(transformed_coord)
-				self.click_timestamp = None
-
-			# do equalization
-			depths_equalized = np.zeros((len(depths),1))
-			for idx,(i,depth) in enumerate(sorted(enumerate(depths), key=lambda x: -x[1])):
-				depths_equalized[i] = idx/float(len(depths)-1)
 			for i in range(self.projected_points.shape[0]):
 				if not(np.isnan(self.projected_points[i,0,0])) and not(np.isnan(self.projected_points[i,0,1])):
-					self.depth_image[int(self.projected_points[i,0,1]),int(self.projected_points[i,0,0]),:] = int(depths_equalized[i]*255.0)
+					try:
+						self.depth_image[int(self.projected_points[i,0,1]),int(self.projected_points[i,0,0]),:] = 255
+					except:
+						pass
 			self.depth_image_lock.release()
 		except Exception as ex:
 			print "Encountered an errror! ", ex
 			self.depth_image_lock.release()
 
 	def run(self):
+		kernel = np.ones((3,3),'uint8')
 		r = rospy.Rate(10)
+		processed = set()
 		while not(rospy.is_shutdown()):
 			cv2.waitKey(5)
-			if self.depth_image != None:
-				# dilate the depth image for display since it is so sparse
-				if not(self.depth_image_lock.locked()):
-					kernel = np.ones((5,5),'uint8')
-					self.depth_image_lock.acquire()
-					cv2.imshow("depth_feed", cv2.resize(cv2.dilate(self.depth_image, kernel),(self.depth_image.shape[1]/self.downsample_factor,
-																	  					  self.depth_image.shape[0]/self.downsample_factor)))
-					self.depth_image_lock.release()
 
-			if self.image != None:
-				cv2.imshow("image_feed", cv2.resize(self.image,(self.image.shape[1]/self.downsample_factor,
-															self.image.shape[0]/self.downsample_factor)))
-			if not(self.use_depth_only) and self.image != None and self.depth_image != None:
-				kernel = np.ones((3,3),'uint8')
+			if self.image != None and self.depth_image != None:
 				self.depth_image_lock.acquire()
-				nearest_image = self.get_nearest_image_temporally(self.depth_image_timestamp)
-				ret, depth_threshed = cv2.threshold(self.depth_image,1,255,cv2.THRESH_BINARY)
-				combined_img = (cv2.dilate(depth_threshed,kernel)*0.2 + nearest_image*0.8).astype(dtype=np.uint8)
-				cv2.imshow("combined_feed", cv2.resize(combined_img,(self.image.shape[1]/self.downsample_factor,
-													   self.image.shape[0]/self.downsample_factor)))
+				if self.depth_image_timestamp not in processed:
+					nearest_image = self.get_nearest_image_temporally(self.depth_image_timestamp)
+					ret, depth_threshed = cv2.threshold(self.depth_image,1,255,cv2.THRESH_BINARY)
+					combined_img = (cv2.dilate(depth_threshed,kernel)*0.2 + nearest_image*0.8).astype(dtype=np.uint8)
+					cv2.imshow("combined_feed", cv2.resize(combined_img,(self.image.shape[1]/self.downsample_factor,
+														   self.image.shape[0]/self.downsample_factor)))
 
-				self.depth_image_lock.release()
-
-			if self.depth_image != None and self.use_depth_only:
-				kernel = np.ones((5,5),'uint8')
-				self.depth_image_lock.acquire()
-				ret, depth_threshed = cv2.threshold(self.depth_image,1,255,cv2.THRESH_BINARY)
-				combined_img = (cv2.dilate(depth_threshed,kernel)).astype(dtype=np.uint8)
-				cv2.imshow("combined_feed", cv2.resize(combined_img,(combined_img.shape[1]/self.downsample_factor,
-													   combined_img.shape[0]/self.downsample_factor)))
-
+					processed.add(self.depth_image_timestamp)
 				self.depth_image_lock.release()
 
 			r.sleep()
 
 if __name__ == '__main__':
 	rospy.init_node('make_depth_image')
-	use_depth_only = rospy.get_param('/use_depth_only',False)
-	node = DepthImageCreator(use_depth_only)
+	node = DepthImageCreator()
 	node.run()

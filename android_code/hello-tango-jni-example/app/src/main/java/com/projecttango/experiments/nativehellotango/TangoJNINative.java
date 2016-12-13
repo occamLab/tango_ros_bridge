@@ -16,12 +16,19 @@
 
 package com.projecttango.experiments.nativehellotango;
 import android.os.IBinder;
+import android.util.Log;
 
 /**
  * Interfaces between C and Java.
  */
 public class TangoJNINative {
   static {
+    // This project depends on tango_client_api, so we need to make sure we load
+    // the correct library first.
+    if (TangoInitializationHelper.loadTangoSharedLibrary() ==
+            TangoInitializationHelper.ARCH_ERROR) {
+      Log.e("TangoJNINative", "ERROR! Unable to load libtango_client_api.so!");
+    }
     System.loadLibrary("hello_tango_jni_example");
   }
 
@@ -35,9 +42,9 @@ public class TangoJNINative {
 
   public static native void disconnect();
   // byte[] instead of void
-  public static native byte[] returnArrayColor();
+  public static native byte[] returnArrayColor(double[] frameTimestamp);
 
-  public static native byte[] returnArrayFisheye();
+  public static native byte[] returnArrayFisheye(double[] frameTimestamp);
 
   public static native double getColorFrameTimestamp();
 

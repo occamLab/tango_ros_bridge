@@ -124,7 +124,6 @@ public class HelloTangoActivity extends Activity {
         @Override
         public void onReceive(Context arg0, Intent arg1) {
             WifiManager wifiMan = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-            System.out.println("Is Scan always available? " + wifiMan.isScanAlwaysAvailable());
             if (udpWIFIScan != null && remote != null && scanPacket == null) {
                 ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
                 List<ScanResult> detected_aps = wifiMan.getScanResults();
@@ -212,9 +211,8 @@ public class HelloTangoActivity extends Activity {
                             }
                         }
                         try {
-                            // throttle the speed at which we send data
-                            // TODO: allow this to be configured via some sort of user interface widget
-                            Thread.sleep(100);
+                            // throttle the speed at which we send data.  The camera intrinsics don't change, so no need to go nuts here.
+                            Thread.sleep(1000);
                         } catch (InterruptedException ex) {
                             System.err.println("Something weird happened");
                         }
@@ -241,9 +239,8 @@ public class HelloTangoActivity extends Activity {
                             }
                         }
                         try {
-                            // throttle the speed at which we send data
-                            // TODO: allow this to be configured via some sort of user interface widget
-                            Thread.sleep(100);
+                            // throttle the speed at which we send data.  The camera intrinsics don't change, so no need to go nuts here.
+                            Thread.sleep(1000);
                         } catch (InterruptedException ex) {
                             System.err.println("Something weird happened");
                         }
@@ -254,60 +251,67 @@ public class HelloTangoActivity extends Activity {
 
             pointCloudThread = new Thread(new Runnable() {
                 public void run() {
+                    double lastPointCloudTimeStampSent = 0.0;
+
                     while (true) {
                         int max_floats_per_packet = 15000;
+                        long start = System.currentTimeMillis();
                         float[] currPointCloud = TangoJNINative.returnPointCloud();
-                        //imagesColorThread.interrupt();
-                        System.out.println("POINT CLOUD SIZE " + currPointCloud.length);
-                        if (connected) {
-                            ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
-                            try {
-                                udpPayload.write("POINTCLOUDSTARTINGRIGHTNOW\n".getBytes());
-                                // was throttling this before
-                                byte[] buf;
-                                int remainingFloats = currPointCloud.length;
 
-                                if (remainingFloats > max_floats_per_packet) {
-                                    buf = new byte[4*max_floats_per_packet];
-                                } else {
-                                    buf = new byte[4*remainingFloats];
-                                }
-                                int buffPosition = 0;
+                        if (currPointCloud[0] != lastPointCloudTimeStampSent) {
+                            lastPointCloudTimeStampSent = currPointCloud[0];
+                            System.out.println("delta_t cloud " + (System.currentTimeMillis() - start));
+                            System.out.println("POINT CLOUD SIZE " + currPointCloud.length);
+                            if (connected) {
+                                ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                                try {
+                                    udpPayload.write("POINTCLOUDSTARTINGRIGHTNOW\n".getBytes());
+                                    // was throttling this before
+                                    byte[] buf;
+                                    int remainingFloats = currPointCloud.length;
 
-                                for (int i = 0; i < currPointCloud.length; ++i) {
-                                    if (buffPosition >= max_floats_per_packet) {
-                                        udpPayload.write(buf);
-                                        byte[] payload = udpPayload.toByteArray();
-                                        udpPointCloud.send(new DatagramPacket(payload, payload.length, remote, portNumberPointCloud));
-                                        udpPayload = new ByteArrayOutputStream();
-                                        buffPosition = 0;
-                                        if (remainingFloats > max_floats_per_packet) {
-                                            buf = new byte[4*max_floats_per_packet];
-                                        } else {
-                                            System.out.println("POINT allocating partial packet " + remainingFloats);
-                                            buf = new byte[4*remainingFloats];
-                                        }
+                                    if (remainingFloats > max_floats_per_packet) {
+                                        buf = new byte[4 * max_floats_per_packet];
+                                    } else {
+                                        buf = new byte[4 * remainingFloats];
                                     }
-                                    int val = Float.floatToRawIntBits(currPointCloud[i]);
-                                    buf[4 * buffPosition] = (byte) (val >> 24);
-                                    buf[4 * buffPosition + 1] = (byte) (val >> 16);
-                                    buf[4 * buffPosition + 2] = (byte) (val >> 8);
-                                    buf[4 * buffPosition + 3] = (byte) (val);
-                                    buffPosition++;
-                                    remainingFloats--;
+                                    int buffPosition = 0;
+
+                                    for (int i = 0; i < currPointCloud.length; ++i) {
+                                        if (buffPosition >= max_floats_per_packet) {
+                                            udpPayload.write(buf);
+                                            byte[] payload = udpPayload.toByteArray();
+                                            udpPointCloud.send(new DatagramPacket(payload, payload.length, remote, portNumberPointCloud));
+                                            udpPayload = new ByteArrayOutputStream();
+                                            buffPosition = 0;
+                                            if (remainingFloats > max_floats_per_packet) {
+                                                buf = new byte[4 * max_floats_per_packet];
+                                            } else {
+                                                System.out.println("POINT allocating partial packet " + remainingFloats);
+                                                buf = new byte[4 * remainingFloats];
+                                            }
+                                        }
+                                        int val = Float.floatToRawIntBits(currPointCloud[i]);
+                                        buf[4 * buffPosition] = (byte) (val >> 24);
+                                        buf[4 * buffPosition + 1] = (byte) (val >> 16);
+                                        buf[4 * buffPosition + 2] = (byte) (val >> 8);
+                                        buf[4 * buffPosition + 3] = (byte) (val);
+                                        buffPosition++;
+                                        remainingFloats--;
+                                    }
+                                    udpPayload.write(buf);
+                                    udpPayload.write("POINTCLOUDENDINGRIGHTNOW\n".getBytes());
+                                    byte[] payload = udpPayload.toByteArray();
+                                    udpPointCloud.send(new DatagramPacket(payload, payload.length, remote, portNumberPointCloud));
+                                } catch (Exception ex) {
+                                    System.out.println("ERROR:  " + ex.getMessage());
                                 }
-                                udpPayload.write(buf);
-                                udpPayload.write("POINTCLOUDENDINGRIGHTNOW\n".getBytes());
-                                byte[] payload = udpPayload.toByteArray();
-                                udpPointCloud.send(new DatagramPacket(payload, payload.length, remote, portNumberPointCloud));
-                            } catch (Exception ex) {
-                                System.out.println("ERROR:  " + ex.getMessage());
                             }
                         }
                         try {
                             // throttle the speed at which we send data
                             // TODO: allow this to be configured via some sort of user interface widget
-                            Thread.sleep(500);
+                            Thread.sleep(50);
                         } catch (InterruptedException ex) {
                             System.err.println("Thread was interrupted!");
                         }
@@ -317,113 +321,129 @@ public class HelloTangoActivity extends Activity {
 
             imagesColorThread = new Thread(new Runnable() {
                 public void run() {
+                    double lastTimeStamp = 0.0;
                     while (true) {
-                        double frameTimeStamp = TangoJNINative.getColorFrameTimestamp();
-                        byte[] myArray = TangoJNINative.returnArrayColor();
-                        if (myArray != null && myArray.length != 0) {
-                            bmColor.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
+                        if (TangoJNINative.getColorFrameTimestamp() != lastTimeStamp) {
+                            double[] frameTimeStamp = new double[1];
+                            byte[] myArray = TangoJNINative.returnArrayColor(frameTimeStamp);
+                            lastTimeStamp = frameTimeStamp[0];
 
-                            if (connected) {
-                                try {
-                                    ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
-                                    udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
-                                    udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
-                                    String frameTimeStampAsString = String.valueOf(frameTimeStamp);
-                                    udpPayload.write((frameTimeStampAsString + "\n").getBytes());
-                                    udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
-                                    bmColor.compress(Bitmap.CompressFormat.JPEG, 20, udpPayload);
-                                    udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
-                                    byte[] payload = udpPayload.toByteArray();
-                                    udpColorImages.send(new DatagramPacket(payload, payload.length, remote, portNumberColorImages));
-                                } catch (IOException ex) {
-                                    ex.printStackTrace();
-                                    System.err.println("ERROR!");
+                            if (myArray != null && myArray.length != 0) {
+                                bmColor.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
+
+                                if (connected) {
+                                    try {
+                                        ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                                        udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
+                                        udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
+                                        String frameTimeStampAsString = String.valueOf(frameTimeStamp[0]);
+                                        udpPayload.write((frameTimeStampAsString + "\n").getBytes());
+                                        udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
+                                        bmColor.compress(Bitmap.CompressFormat.JPEG, 20, udpPayload);
+                                        udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
+                                        byte[] payload = udpPayload.toByteArray();
+                                        udpColorImages.send(new DatagramPacket(payload, payload.length, remote, portNumberColorImages));
+                                    } catch (IOException ex) {
+                                        ex.printStackTrace();
+                                        System.err.println("ERROR!");
+                                    }
                                 }
                             }
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    ImageView image = (ImageView) findViewById(R.id.test_image);
+                                    image.invalidate();
+                                }
+                            });
                         }
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                ImageView image = (ImageView) findViewById(R.id.test_image);
-                                image.invalidate();
-                            }
-                        });
-                       // try {
+                       try {
                             // throttle the speed at which we send data
                             // TODO: allow this to be configured via some sort of user interface widget
-                            //Thread.sleep(50);
-                       // } catch (InterruptedException ex) {
-                            // System.err.println("Something weird happened");
-                       // }
+                            Thread.sleep(50);
+                       } catch (InterruptedException ex) {
+                            System.err.println("Something weird happened");
+                       }
                     }
                 }
             });
 
             imagesFisheyeThread = new Thread(new Runnable() {
                 public void run() {
+                    double lastTimeStamp = 0.0;
                     while (true) {
-                        double frameTimeStamp = TangoJNINative.getFisheyeFrameTimestamp();
-                        byte[] myArray = TangoJNINative.returnArrayFisheye();
-                        if (myArray != null && myArray.length != 0) {
-                            bmFisheye.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
+                        if (TangoJNINative.getFisheyeFrameTimestamp() != lastTimeStamp) {
+                            long start = System.currentTimeMillis();
+                            double[] frameTimeStamp = new double[1];
+                            byte[] myArray = TangoJNINative.returnArrayFisheye(frameTimeStamp);
+                            lastTimeStamp = frameTimeStamp[0];
 
-                            if (connected) {
-                                try {
-                                    ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
-                                    udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
-                                    udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
-                                    String frameTimeStampAsString = String.valueOf(frameTimeStamp);
-                                    udpPayload.write((frameTimeStampAsString + "\n").getBytes());
-                                    udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
-                                    bmFisheye.compress(Bitmap.CompressFormat.JPEG, 50, udpPayload);
-                                    udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
-                                    byte[] payload = udpPayload.toByteArray();
-                                    udpFisheyeImages.send(new DatagramPacket(payload, payload.length, remote, portNumberFisheyeImages));
-                                } catch (IOException ex) {
-                                    ex.printStackTrace();
-                                    System.err.println("ERROR!");
+                            if (myArray != null && myArray.length != 0) {
+                                bmFisheye.copyPixelsFromBuffer(ByteBuffer.wrap(myArray));
+
+                                if (connected) {
+                                    try {
+                                        ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                                        udpPayload.write("DEPTHFRAMESTARTINGRIGHTNOW\n".getBytes());
+                                        udpPayload.write("DEPTHTIMESTAMPSTARTINGRIGHTNOW\n".getBytes());
+                                        String frameTimeStampAsString = String.valueOf(frameTimeStamp[0]);
+                                        udpPayload.write((frameTimeStampAsString + "\n").getBytes());
+                                        udpPayload.write("DEPTHTIMESTAMPENDINGRIGHTNOW\n".getBytes());
+                                        bmFisheye.compress(Bitmap.CompressFormat.JPEG, 80, udpPayload);
+                                        udpPayload.write("DEPTHFRAMEENDINGRIGHTNOW\n".getBytes());
+                                        byte[] payload = udpPayload.toByteArray();
+                                        udpFisheyeImages.send(new DatagramPacket(payload, payload.length, remote, portNumberFisheyeImages));
+                                    } catch (IOException ex) {
+                                        ex.printStackTrace();
+                                        System.err.println("ERROR!");
+                                    }
                                 }
                             }
                         }
-                       // try {
+                       try {
                             // throttle the speed at which we send data
                             // TODO: allow this to be configured via some sort of user interface widget
-                            //Thread.sleep(50);
-                       // } catch (InterruptedException ex) {
-                            // System.err.println("Something weird happened");
-                       // }
+                           Thread.sleep(5);
+                       } catch (InterruptedException ex) {
+                            System.err.println("Something weird happened");
+                       }
                     }
                 }
             });
 
             poseThread = new Thread(new Runnable() {
                 public void run() {
+                    double lastPoseSentTimestamp = 0.0;
                     while (true) {
                         double[] currPose = TangoJNINative.returnPoseArray();
-                        if (connected) {
-                            ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
-                            try {
-                                udpPayload.write("POSESTARTINGRIGHTNOW\n".getBytes());
-                                for (int i = 0; i < currPose.length; i++) {
-                                    udpPayload.write(String.valueOf(currPose[i]).getBytes());
+                        if (currPose[7] != lastPoseSentTimestamp) {
+                            // remember the pose timestamp so we don't send the same one multiple times
+                            lastPoseSentTimestamp = currPose[7];
+                            if (connected) {
+                                ByteArrayOutputStream udpPayload = new ByteArrayOutputStream();
+                                try {
+                                    udpPayload.write("POSESTARTINGRIGHTNOW\n".getBytes());
+                                    for (int i = 0; i < currPose.length; i++) {
+                                        udpPayload.write(String.valueOf(currPose[i]).getBytes());
 
-                                    if (i + 1 < currPose.length) {
-                                        udpPayload.write(",".getBytes());
+                                        if (i + 1 < currPose.length) {
+                                            udpPayload.write(",".getBytes());
+                                        }
                                     }
+                                    udpPayload.write("POSEENDINGRIGHTNOW\n".getBytes());
+                                    byte[] payload = udpPayload.toByteArray();
+                                    udpPose.send(new DatagramPacket(payload, payload.length, remote, portNumberPose));
+                                } catch (IOException e) {
+                                    e.printStackTrace();
                                 }
-                                udpPayload.write("POSEENDINGRIGHTNOW\n".getBytes());
-                                byte[] payload = udpPayload.toByteArray();
-                                udpPose.send(new DatagramPacket(payload, payload.length, remote, portNumberPose));
-                            } catch (IOException e) {
-                                e.printStackTrace();
                             }
-                        }
-                        try {
-                            // throttle the speed at which we send data
-                            // TODO: allow this to be configured via some sort of user interface widget
-                            Thread.sleep(100);
-                        } catch (InterruptedException ex) {
-                            System.err.println("Something weird happened");
+                            try {
+                                // throttle the speed at which we send data
+                                // TODO: allow this to be configured via some sort of user interface widget
+                                Thread.sleep(5);
+                            } catch (InterruptedException ex) {
+                                System.err.println("Something weird happened");
+                            }
                         }
                     }
                 }

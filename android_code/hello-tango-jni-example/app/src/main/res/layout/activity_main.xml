@@ -40,7 +40,7 @@
         android:text="scan Wifi RSSI"
         android:id="@+id/checkBox"
         android:onClick="toggleWifiScanStatus"
-        android:checked="true" />
+        android:checked="false" />
 
     <ImageView
         android:id="@+id/test_image"

@@ -50,7 +50,17 @@ TangoErrorType TangoSupport_GetTangoVersion(JNIEnv* env, jobject activity,
 typedef TangoErrorType (*TangoSupport_GetPoseAtTimeFn)(
     double timestamp, TangoCoordinateFramePair frame, TangoPoseData* pose);
 
-void TangoSupport_initialize(TangoSupport_GetPoseAtTimeFn getPoseAtTime);
+typedef TangoErrorType (*TangoSupport_GetCameraIntrinsicsFn)(
+    TangoCameraId camera_id, TangoCameraIntrinsics* intrinsics);
+
+void TangoSupport_initialize(
+    TangoSupport_GetPoseAtTimeFn getPoseAtTime,
+    TangoSupport_GetCameraIntrinsicsFn getCameraIntrinsics);
+
+inline void TangoSupport_initializeLibrary() {
+  TangoSupport_initialize(TangoService_getPoseAtTime,
+                          TangoService_getCameraIntrinsics);
+}
 
 /// The TangoSupportImageBufferManager maintains a set of image buffers to
 /// manage transferring a TangoImageBuffer from the callback thread to a render
@@ -198,8 +208,9 @@ TangoErrorType TangoSupport_copyXYZij(const TangoXYZij* input_point_cloud,
 ///   the color camera used to obtain uv_coordinates.
 /// @param uv_coordinates The UV coordinates for the user selection. This is
 ///   expected to be between (0.0, 0.0) and (1.0, 1.0). Cannot be NULL.
-/// @param intersection_point The output point in point cloud coordinates the
-///   user selected. Cannot be NULL.
+/// @param intersection_point The intersection of the fitted plane with the user
+///   selected camera-ray, in point cloud coordinates, accounting for distortion
+///   by undistorting the input uv coordinate. Cannot be NULL.
 /// @param plane_model The four parameters a, b, c, d for the general plane
 ///   equation ax + by + cz + d = 0 of the plane fit. The first three
 ///   components are a unit vector. The output is in the coordinate system of
@@ -395,6 +406,30 @@ typedef enum {
   // etc.
 } TangoSupportEngineType;
 
+/// @brief Struct to hold transformation float matrix and its metadata.
+typedef struct TangoMatrixTransformData {
+  /// Timestamp of the time that this pose estimate corresponds to.
+  double timestamp;
+
+  /// Matrix in column major order.
+  float matrix[16];
+
+  /// The status of the pose, according to the pose lifecycle.
+  TangoPoseStatusType status_code;
+} TangoMatrixTransformData;
+
+/// @brief Struct to hold transformation double matrix and its metadata.
+typedef struct TangoDoubleMatrixTransformData {
+  /// Timestamp of the time that this pose estimate corresponds to.
+  double timestamp;
+
+  /// Matrix in column major order.
+  double matrix[16];
+
+  /// The status of the pose, according to the pose lifecycle.
+  TangoPoseStatusType status_code;
+} TangoDoubleMatrixTransformData;
+
 // Display orientation. This is a relative orientation between
 // default (natural) screen orientation and current screen orientation.
 // The orientation is calculated based on a clockwise rotation.
@@ -438,37 +473,15 @@ TangoErrorType TangoSupport_calculateRelativePose(
     double target_timestamp, TangoCoordinateFrameType target_frame,
     TangoPoseData* base_frame_T_target_frame);
 
-/// @brief Use the device with respect to start of service or area description
-/// pose to calculate the pose of a selected Tango target coordinate frame
-/// represented in the selected rendering engine world coordinate frame.
-/// NOTE: In order to calculate poses from Tango target coordinate frames
-/// other than DEVICE, the device needs to be initialized, otherwise
-/// TANGO_INVALID will be returned.
-///
-/// @param convention The targeted rendering engine coordinate convention.
-/// @param target_frame The Tango device coordinate frame we want represented
-///   in the rendering engine world frame.
-/// @param pose_start_service_T_device A reference to the TangoPoseData to be
-///   converted. This must be for the frame pair (base frame:START_SERVICE
-///   or AREA_DESCRIPTION, target frame: DEVICE).
-/// @param engine_pose Where the resulting pose will be returned.
-/// @return @c TANGO_SUCCESS on success, @c TANGO_INVALID on invalid input or if
-///   the service needs to be initialized, and @c TANGO_ERROR on failure.
-TangoErrorType TangoSupport_getPoseInEngineFrame(
-    const TangoCoordinateConventionType convention,
-    const TangoCoordinateFrameType target_frame,
-    const TangoPoseData& pose_start_service_T_device,
-    TangoPoseData* engine_pose);
-
-/// @brief Get a pose at a given timestamp from the base to the target frame,
+/// @brief Get a pose at a given timestamp from the base to the target frame
 /// using the specified engine's coordinate system conventions.
 ///
 /// @param timestamp Time specified in seconds. This behaves the same as the
 ///   @p timestamp parameter in @c TangoService_getPoseAtTime.
 /// @param base_frame The base frame of reference to use in the query.
 /// @param target_frame The target frame of reference to use in the query.
-/// @param engine The coordinate system convetions to use for the @p pose data.
-///   Can be OpenGl, Unity, or Tango.
+/// @param engine The coordinate system conventions to use for the @p pose data.
+///   Can be OpenGL, Unity, or Tango.
 /// @param display_rotation_type The index of the display rotation between
 ///   display's default (natural) orientation and current orientation.
 /// @param pose The pose of target with respect to base frame of reference,
@@ -480,26 +493,8 @@ TangoErrorType TangoSupport_getPoseAtTime(
     TangoCoordinateFrameType target_frame, TangoSupportEngineType engine,
     TangoSupportDisplayRotation display_rotation_type, TangoPoseData* pose);
 
-/// @deprecated Use @c TangoSupport_getPoseInEngineFrame instead.
-/// @brief Convert device with respect to start of service pose into camera
-/// with respect to world pose for supported platforms.
-///
-/// @param coordinate_convention The targeted coordinate convention.
-/// @param tango_pose_data A pointer to the TangoPoseData going to be
-///   converted. This must be for the frame pair (base frame: START_SERVICE,
-///   target frame: DEVICE).
-/// @param translation The camera with respect to world translation,
-///   in the order of x, y, z.
-/// @param orientation The camera with respect to world orientation,
-///   in the order of x, y, z, w.
-/// @return @c TANGO_SUCCESS on success or @c TANGO_INVALID on invalid input.
-TangoErrorType TangoSupport_getWorldTCameraPose(
-    TangoCoordinateConventionType coordinate_convention,
-    const TangoPoseData* pose_start_service_T_device, double translation[3],
-    double orientation[4]);
-
-/// @brief Calculate the tranformation matrix - in column major order -
-/// between specified frames and engine types.
+/// @brief Calculate the tranformation matrix between specified frames and
+/// engine types. The output matrix uses floats and is in column-major order.
 ///
 /// @param timestamp The timestamp of the transformation matrix of interest.
 /// @param base_frame The frame of reference the matrix converts to.
@@ -508,13 +503,39 @@ TangoErrorType TangoSupport_getWorldTCameraPose(
 ///   converts to.
 /// @param target_engine Specifies the original orientation convention the
 ///   matrix converts from.
-/// @param matrix_transform The final matrix output.
+/// @param display_rotation_type Specifies how the display screen is
+///   oriented. NOT YET UTILIZED.
+/// @param matrix_transform The final matrix output with metadata.
 /// @return @c TANGO_INVALID on invalid input. @c TANGO_ERROR if the
 ///   pose calculation returns error. @c TANGO_SUCCESS otherwise.
 TangoErrorType TangoSupport_getMatrixTransformAtTime(
     double timestamp, TangoCoordinateFrameType base_frame,
     TangoCoordinateFrameType target_frame, TangoSupportEngineType base_engine,
-    TangoSupportEngineType target_engine, double matrix_transform[16]);
+    TangoSupportEngineType target_engine,
+    TangoSupportDisplayRotation display_rotation_type,
+    TangoMatrixTransformData* matrix_transform);
+
+/// @brief Calculate the tranformation matrix between specified frames and
+/// engine types. The output matrix uses doubles and is in column-major order.
+///
+/// @param timestamp The timestamp of the transformation matrix of interest.
+/// @param base_frame The frame of reference the matrix converts to.
+/// @param target_frame The frame of reference the matrix converts from.
+/// @param base_engine Specifies the final orientation convention the matrix
+///   converts to.
+/// @param target_engine Specifies the original orientation convention the
+///   matrix converts from.
+/// @param display_rotation_type Specifies how the display screen is
+///   oriented. NOT YET UTILIZED.
+/// @param matrix_transform The final matrix output with metadata.
+/// @return @c TANGO_INVALID on invalid input. @c TANGO_ERROR if the
+///   pose calculation returns error. @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_getDoubleMatrixTransformAtTime(
+    double timestamp, TangoCoordinateFrameType base_frame,
+    TangoCoordinateFrameType target_frame, TangoSupportEngineType base_engine,
+    TangoSupportEngineType target_engine,
+    TangoSupportDisplayRotation display_rotation_type,
+    TangoDoubleMatrixTransformData* matrix_transform);
 
 /// @brief Multiplies a point by a matrix. No projective divide is done, the W
 ///   component is dropped. We explicitly support the case where point == out to
@@ -523,12 +544,11 @@ TangoErrorType TangoSupport_getMatrixTransformAtTime(
 /// @param matrix_transform The matrix the point is multiplied by.
 /// @param point The original point.
 /// @param out The ouput point.
-/// @return Returns @c TANGO_INVALID on invalid input. @c TANGO_SUCCESS
-///   otherwise.
-TangoErrorType TangoSupport_transformPoint(
+/// @return c TANGO_INVALID on invalid input; @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_doubleTransformPoint(
     const double matrix_transform[16], const double point[3], double out[3]);
 
-/// @brief Multiplies a pose - represented as a position and a quaternion - by a
+/// @brief Multiplies a pose (represented as a position and a quaternion) by a
 ///   matrix. No projective divide is done, the W component is dropped. We
 ///   explicitly support the case where point == out to do an in-place
 ///   transform.
@@ -538,15 +558,13 @@ TangoErrorType TangoSupport_transformPoint(
 /// @param quaternion The original pose's rotation component.
 /// @param out_position The final pose's translation component.
 /// @param out_quaternion The final pose's rotation component.
-/// @return Returns @c TANGO_INVALID on invalid input. @c TANGO_SUCCESS
-///   otherwise.
-TangoErrorType TangoSupport_transformPose(const double matrix_transform[16],
-                                          const double position[3],
-                                          const double quaternion[4],
-                                          double out_position[3],
-                                          double out_quaternion[4]);
+/// @return c TANGO_INVALID on invalid input; @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_doubleTransformPose(
+    const double matrix_transform[16], const double position[3],
+    const double quaternion[4], double out_position[3],
+    double out_quaternion[4]);
 
-/// @brief Multiplies a point cloud - represented as a TangoXYZij - by a matrix.
+/// @brief Multiplies a point cloud (represented as a TangoXYZij) by a matrix.
 ///   No projective divide is done, the W component is dropped. We explicitly
 ///   support the case where point == out to do an in-place transform. The
 ///   points in the output point cloud must be allocated before calling this
@@ -555,11 +573,93 @@ TangoErrorType TangoSupport_transformPose(const double matrix_transform[16],
 /// @param matrix_transform The matrix all the points are transformed by.
 /// @param point_cloud The original point cloud.
 /// @param out The point cloud after translation.
-/// @return Returns @c TANGO_INVALID on invalid input. @c TANGO_SUCCESS
-///   otherwise.
-TangoErrorType TangoSupport_transformPointCloud(
+/// @return c TANGO_INVALID on invalid input; @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_doubleTransformPointCloud(
     const double matrix_transform[16], const TangoXYZij* point_cloud,
     TangoXYZij* out);
+
+/// @brief Multiplies a point by a matrix. No projective divide is done, the W
+///   component is dropped. We explicitly support the case where point == out to
+///   do an in-place transform.
+///
+/// @param matrix_transform The matrix the point is multiplied by.
+/// @param point The original point.
+/// @param out The ouput point.
+/// @return c TANGO_INVALID on invalid input; @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_transformPoint(const float matrix_transform[16],
+                                           const float point[3], float out[3]);
+
+/// @brief Multiplies a pose (represented as a position and a quaternion) by a
+///   matrix. No projective divide is done, the W component is dropped. We
+///   explicitly support the case where point == out to do an in-place
+///   transform.
+///
+/// @param matrix_transform The matrix the pose is transformed by.
+/// @param position The original pose's translation component.
+/// @param quaternion The original pose's rotation component.
+/// @param out_position The final pose's translation component.
+/// @param out_quaternion The final pose's rotation component.
+/// @return c TANGO_INVALID on invalid input; @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_transformPose(const float matrix_transform[16],
+                                          const float position[3],
+                                          const float quaternion[4],
+                                          float out_position[3],
+                                          float out_quaternion[4]);
+
+/// @brief Multiplies a point cloud (represented as a TangoXYZij) by a matrix.
+///   No projective divide is done, the W component is dropped. We explicitly
+///   support the case where point == out to do an in-place transform. The
+///   points in the output point cloud must be allocated before calling this
+///   function.
+///
+/// @param matrix_transform The matrix all the points are transformed by.
+/// @param point_cloud The original point cloud.
+/// @param out The point cloud after translation.
+/// @return c TANGO_INVALID on invalid input; @c TANGO_SUCCESS otherwise.
+TangoErrorType TangoSupport_transformPointCloud(
+    const float matrix_transform[16], const TangoXYZij* point_cloud,
+    TangoXYZij* out);
+
+/// @}
+
+/// @defgroup ProjectionSupport Projection and Unprojection Functions
+/// @brief Functions for projecting points or unprojecting pixels.
+/// @{
+///
+/// @brief Calculates the pixel coordinates in the camera frame of a
+/// user-specified 3D point expressed in the same camera frame, accounting for
+/// intrinsic distortion.
+///
+/// @param camera_intrinsics The camera intrinsics for the camera. Cannot
+//    be NULL.
+/// @param camera_point The point (x, y, z) to be projected, expressed in the
+///   camera frame. Cannot be NULL.
+/// @param pixel_coordinates The pixel coordinates of the projected point.
+///   This is between (0.0, 0.0) and (width, height) if the point projects into
+///   the image. Cannot be NULL.
+/// @param is_distorted_pixel_in_image A flag valued 1 if the projected pixel
+///   coordinate are valid and inside the image (between 0 and width/height).
+///   0 otherwise.
+/// @return @c TANGO_SUCCESS on success or @c TANGO_INVALID on invalid input.
+TangoErrorType TangoSupport_projectCameraPointToDistortedPixel(
+    const TangoCameraIntrinsics* camera_intrinsics, const float camera_point[3],
+    float pixel_coordinates[2], int* is_distorted_pixel_in_image);
+
+/// @brief Calculates camera ray in the camera frame of a user-specified pixel
+/// expressed in the distorted image, accounting for intrinsic distortion.
+///
+/// @param camera_intrinsics The camera intrinsics for the camera. Cannot
+//    be NULL.
+/// @param pixel_coordinates The pixel coordinates of the point to unproject.
+///   This normally is between (0.0, 0.0) and (width, height).
+///   Cannot be NULL.
+/// @param camera_ray The ray (x, y, 1.0) corresponding to the pixel after
+///   undistortion, expressed in the camera frame. Cannot be NULL.
+/// @return @c TANGO_SUCCESS on success or @c TANGO_INVALID on invalid input for
+///   the distortion model
+TangoErrorType TangoSupport_DistortedPixelToCameraRay(
+    const TangoCameraIntrinsics* camera_intrinsics,
+    const float pixel_coordinates[2], float camera_ray[3]);
 
 /// @}
 
@@ -763,7 +863,7 @@ struct TangoSupportEdge {
 
 /// @brief Find the list of edges "close" to the user-specified location and
 /// that are on the plane estimated from the input location. The edges are
-/// specified in the depth frame.
+/// detected in the color camera image and specified in the depth frame.
 ///
 /// @param point_cloud The point cloud. Cannot be NULL and must have sufficient
 ///   points to estimate the plane at the location of the input.

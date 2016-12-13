@@ -13,8 +13,7 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler, qua
 from math import pi
 import numpy as np
 import tf
-from tf.transformations import euler_from_quaternion, rotation_matrix, quaternion_from_matrix, quaternion_matrix
-
+from tf.transformations import *
 
 class TransformHelpers:
     """ Some convenience functions for translating between various representions of a pose. """
@@ -122,31 +121,23 @@ def handle_pkt(pkt=None):
     pose_vals = pose_vals[0:-3]
 
     msg = PoseStamped()
-    # might need to revisit time stamps
     msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
-
     msg.header.frame_id = coordinate_frame
+
     print tango_timestamp
     msg.pose.position.x = float(pose_vals[0])
     msg.pose.position.y = float(pose_vals[1])
     msg.pose.position.z = float(pose_vals[2])
 
-    # two of the rotation axes seem to be off...
-    # we are fixing this in a hacky way right now
-    euler_angles = euler_from_quaternion(pose_vals[3:])
-    pose_vals[3:] = quaternion_from_euler(euler_angles[1],
-                                          euler_angles[0]+pi/2, # this is right
-                                          euler_angles[2]-pi/2)
-    euler_angles_transformed = euler_from_quaternion(pose_vals[3:])
+    # convert from righthand android to ROS coordinate system conventions (rotate counter-clockwise pi/2 about y-axis, then rotate pi/2 clockwise around x-axis) 
+    q_rotate = quaternion_multiply(quaternion_about_axis(pi/2, [0, 1, 0]), quaternion_about_axis(-pi/2, [1, 0, 0]))  
+    q_trans = quaternion_multiply([float(p) for p in pose_vals[3:]], q_rotate)
 
-    msg.pose.orientation.x = float(pose_vals[3])
-    msg.pose.orientation.y = float(pose_vals[4])
-    msg.pose.orientation.z = float(pose_vals[5])
-    msg.pose.orientation.w = float(pose_vals[6])
+    msg.pose.orientation.x = float(q_trans[0])
+    msg.pose.orientation.y = float(q_trans[1])
+    msg.pose.orientation.z = float(q_trans[2])
+    msg.pose.orientation.w = float(q_trans[3])
 
-    euler_angles_depth_camera = (euler_angles_transformed[0],
-                                 euler_angles_transformed[1],
-                                 euler_angles_transformed[2])
     pub_pose.publish(msg)
     latest_area_learning_pose = msg
     if latest_area_learning_pose and latest_odom_pose:

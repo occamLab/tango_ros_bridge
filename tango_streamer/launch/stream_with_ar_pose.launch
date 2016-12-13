@@ -1,0 +1,4 @@
+<launch>
+  <include file="$(find tango_streamer)/launch/stream.launch"/>
+  <include file="$(find ar_pose)/launch/ar_pose_multi.launch" ns="fisheye_undistorted"/>
+</launch>

@@ -18,8 +18,12 @@
 #include <android/log.h>
 #include <jni.h>
 #include <stdlib.h>
-#include "tango_client_api.h"
+
+#include <tango_support_api.h>
+//#include <tango_client_api.h>
+
 #include <stdio.h>
+#include <pthread.h>
 #include <math.h>
 
 #define LOG_TAG "hello-tango-jni"
@@ -30,6 +34,12 @@
 // Configuration file describes current states of
 // Tango Service.
 TangoConfig config;
+
+pthread_mutex_t pointCloudLock;
+pthread_mutex_t fisheyeImageLock;
+pthread_mutex_t poseLock;
+pthread_mutex_t areaPoseLock;
+pthread_mutex_t colorImageLock;
 
 jbyteArray pixelBufferColor = 0;
 jbyteArray pixelBufferFisheye = 0;
@@ -186,61 +196,98 @@ void convertToRGBAWithStride(int IMAGE_STRIDE, int W, int H, unsigned char* imag
 //} // function
 
 static void onTangoEvent(void* context, const TangoEvent* evt) {
-	LOGI("MYDEBUG myevt %s:%i:%f", evt->event_key, features_tracked, evt->timestamp);
 	if (strcmp(evt->event_key, "TooFewFeaturesTracked") == 0) {
 		lastFeatureTrackingErrorTimeStamp = evt->timestamp;
 		features_tracked = atoi(evt->event_value);
-		LOGI("MYDEBUG myevt2 %s:%i:%f", evt->event_key, features_tracked, lastFeatureTrackingErrorTimeStamp);
 	}
 }
 
 static void onFrameAvailable(void* context, TangoCameraId camera, const TangoImageBuffer* imageBufferA) {
 
-		LOGI("pixelstest %i, %i, %i, %i", imageBufferA->width, imageBufferA->height, imageBufferA->format, imageBufferA->stride);
 		if (camera == TANGO_CAMERA_FISHEYE) {
+			pthread_mutex_lock(&fisheyeImageLock);
 			lastFisheyeFrameTimeStamp = imageBufferA->timestamp;
 			memcpy(fisheye_image_buffer_copy, imageBufferA->data, imageBufferA->stride*imageBufferA->height*3/2);
+			pthread_mutex_unlock(&fisheyeImageLock);
 		} else {
+			pthread_mutex_lock(&colorImageLock);
 			lastColorFrameTimeStamp = imageBufferA->timestamp;
 			memcpy(color_image_buffer_copy, imageBufferA->data, imageBufferA->stride*imageBufferA->height*3/2);
+			pthread_mutex_unlock(&colorImageLock);
 		}
 	  // --- local constants ------------------------------
 
 		//memcpy(image_buffer_copy, imageBufferA->data, imageBufferA->width*imageBufferA->height*3/2);
 }
 
-static void onXYZijAvailable(void* context, const TangoXYZij* XYZ_ij) {
-	// clear out any old points
+static void onPointCloudAvailable(void* context, const TangoPointCloud* XYZ_ij) {
+	// experiment with putting everything in the odom frame
+	TangoPointCloud transformed;
+	TangoMatrixTransformData depth_cam_to_start_of_service;
 	int i;
-	xyzValid = XYZ_ij->xyz_count;
-	for (i = 0; i < 3*20000; i++) {
+
+	transformed.points = malloc(sizeof(float) * XYZ_ij->num_points * 4);
+
+//	if (TangoSupport_transformPointCloud(depth_cam_to_start_of_service.matrix, XYZ_ij, &transformed) != TANGO_SUCCESS) {
+//		LOE("Failed to transform point cloud");
+//	}
+	// clear out any old points
+	LOGI("PCL: processing");
+	pthread_mutex_lock(&pointCloudLock);
+
+	xyzValid = XYZ_ij->num_points;
+	for (i = 0; i < 3*60000; i++) {
 		xyzBuffer[i] = 0;
 	}
 	xyzBuffer[0] = XYZ_ij->timestamp;
-	for (i = 1; i < XYZ_ij->xyz_count; i++) {
-		xyzBuffer[(i-1)*3+1] = XYZ_ij->xyz[i][0];
-		xyzBuffer[(i-1)*3+2] = XYZ_ij->xyz[i][1];
-		xyzBuffer[(i-1)*3+3] = XYZ_ij->xyz[i][2];
+	for (i = 1; i < XYZ_ij->num_points; i++) {
+		xyzBuffer[(i-1)*3+1] = XYZ_ij->points[i][0];
+		xyzBuffer[(i-1)*3+2] = XYZ_ij->points[i][1];
+		xyzBuffer[(i-1)*3+3] = XYZ_ij->points[i][2];
 	}
+	pthread_mutex_unlock(&pointCloudLock);
+
 }
 
 static void onPoseAvailable(void* context, const TangoPoseData* pose) {
-//    TangoPoseData depthCameraPose;
-//    TangoCoordinateFramePair deviceToDepthCam;
-//    deviceToDepthCam.base = TANGO_COORDINATE_FRAME_DEVICE;
-//    deviceToDepthCam.target =  TANGO_COORDINATE_FRAME_CAMERA_DEPTH;
+//	TangoPoseData startOfServiceInIMU;
+//	TangoCoordinateFramePair startOfServiceToIMU;
+//	startOfServiceToIMU.base = TANGO_COORDINATE_FRAME_START_OF_SERVICE;
+//	startOfServiceToIMU.target =  TANGO_COORDINATE_FRAME_IMU;
 //
-//	TangoService_getPoseAtTime(pose->timestamp, deviceToDepthCam, &depthCameraPose);
-//	LOGI("DepthCam Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
-//		 depthCameraPose.translation[0], depthCameraPose.translation[1], depthCameraPose.translation[2],
-//		 depthCameraPose.orientation[0], depthCameraPose.orientation[2], depthCameraPose.orientation[3],
-//		 depthCameraPose.orientation[3], depthCameraPose.timestamp);
+//	TangoService_getPoseAtTime(pose->timestamp, startOfServiceToIMU, &startOfServiceInIMU);
+//	LOGI("startOfServiceInIMU Frame Fixed Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
+//		 startOfServiceInIMU.translation[0], startOfServiceInIMU.translation[1], startOfServiceInIMU.translation[2],
+//		 startOfServiceInIMU.orientation[0], startOfServiceInIMU.orientation[1], startOfServiceInIMU.orientation[2],
+//		 startOfServiceInIMU.orientation[3], startOfServiceInIMU.timestamp);
+//
+//    TangoPoseData deviceInIMUFrame;
+//    TangoCoordinateFramePair deviceToIMU;
+//    deviceToIMU.base = TANGO_COORDINATE_FRAME_IMU;
+//    deviceToIMU.target =  TANGO_COORDINATE_FRAME_DEVICE;
+//
+//	TangoService_getPoseAtTime(pose->timestamp, deviceToIMU, &deviceInIMUFrame);
+//	LOGI("DeviceInIMU Frame Fixed Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
+//		 deviceInIMUFrame.translation[0], deviceInIMUFrame.translation[1], deviceInIMUFrame.translation[2],
+//		 deviceInIMUFrame.orientation[0], deviceInIMUFrame.orientation[1], deviceInIMUFrame.orientation[2],
+//		 deviceInIMUFrame.orientation[3], deviceInIMUFrame.timestamp);
+//
+//	TangoPoseData depthCamInIMUFrame;
+//	TangoCoordinateFramePair depthCamToIMU;
+//
+//	depthCamToIMU.base = TANGO_COORDINATE_FRAME_IMU;
+//	depthCamToIMU.target =  TANGO_COORDINATE_FRAME_CAMERA_FISHEYE;
+//
+//	TangoService_getPoseAtTime(pose->timestamp, depthCamToIMU, &depthCamInIMUFrame);
+//	LOGI("FisheyeCamInIMU Fixed Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
+//		 depthCamInIMUFrame.translation[0], depthCamInIMUFrame.translation[1], depthCamInIMUFrame.translation[2],
+//		 depthCamInIMUFrame.orientation[0], depthCamInIMUFrame.orientation[1], depthCamInIMUFrame.orientation[2],
+//		 depthCamInIMUFrame.orientation[3], depthCamInIMUFrame.timestamp);
 	if (pose->frame.base == TANGO_COORDINATE_FRAME_START_OF_SERVICE &&
 		pose->frame.target == TANGO_COORDINATE_FRAME_DEVICE) {
-		LOGI("Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f, %f",
-		       pose->translation[0], pose->translation[1], pose->translation[2],
-		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3], pose->timestamp);
+		// experiment with using the IMU instead of the device
+		//pose = &startOfServiceInIMU;
+		pthread_mutex_lock(&poseLock);
 		poseBuffer[0] = pose->translation[0];
 		poseBuffer[1] = pose->translation[1];
 		poseBuffer[2] = pose->translation[2];
@@ -250,23 +297,17 @@ static void onPoseAvailable(void* context, const TangoPoseData* pose) {
 		poseBuffer[6] = pose->orientation[3];
 		poseBuffer[7] = pose->timestamp; // the last is the time
 		poseBuffer[8] = pose->status_code;
-		LOGI("features %f,%f,%f", pose->timestamp, lastFeatureTrackingErrorTimeStamp, fabs(pose->timestamp - lastFeatureTrackingErrorTimeStamp));
+		pthread_mutex_unlock(&poseLock);
+
 		// TODO: might need to communicate this independently of the pose (in case callbacks stop happening)
 		if (fabs(pose->timestamp - lastFeatureTrackingErrorTimeStamp) < 1.0) {
 			poseBuffer[9] = features_tracked;
 		} else {
 			poseBuffer[9] = -1.0;
 		}
-		LOGI("Known Frame Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
-		       pose->translation[0], pose->translation[1], pose->translation[2],
-		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3]);
 	} else if (pose->frame.base == TANGO_COORDINATE_FRAME_AREA_DESCRIPTION &&
 				pose->frame.target == TANGO_COORDINATE_FRAME_DEVICE) {
-		LOGI("Area Device Position: %f, %f, %f. Orientation: %f, %f, %f, %f, Timestamp: %f",
-		       pose->translation[0], pose->translation[1], pose->translation[2],
-		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3], pose->timestamp);
+		pthread_mutex_lock(&areaPoseLock);
 		poseBufferArea[0] = pose->translation[0];
 		poseBufferArea[1] = pose->translation[1];
 		poseBufferArea[2] = pose->translation[2];
@@ -276,26 +317,18 @@ static void onPoseAvailable(void* context, const TangoPoseData* pose) {
 		poseBufferArea[6] = pose->orientation[3];
 		poseBufferArea[7] = pose->timestamp; // the last is the time
 		poseBufferArea[8] = pose->status_code;
-		LOGI("features %f,%f,%f", pose->timestamp, lastFeatureTrackingErrorTimeStamp, fabs(pose->timestamp - lastFeatureTrackingErrorTimeStamp));
+		pthread_mutex_unlock(&areaPoseLock);
+
 		if (fabs(pose->timestamp - lastFeatureTrackingErrorTimeStamp) < 1.0) {
 			poseBufferArea[9] = features_tracked;
 		} else {
 			poseBufferArea[9] = -1.0;
 		}
-		LOGI("Known Frame Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
-		       pose->translation[0], pose->translation[1], pose->translation[2],
-		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3]);
-	} else {
-		LOGI("Unknown Frame Position: %f, %f, %f. Orientation: %f, %f, %f, %f",
-		       pose->translation[0], pose->translation[1], pose->translation[2],
-		       pose->orientation[0], pose->orientation[2], pose->orientation[3],
-		       pose->orientation[3]);
 	}
+
 }
 
 bool TangoSetBinder(JNIEnv* env, jobject service) {
-  LOGI("Attempting to bind to Tango Service");
   if (TangoService_setBinder(env, service) != TANGO_SUCCESS) {
     LOGE("TangoService_setBinder(): Failed");
     return false;
@@ -314,42 +347,60 @@ bool TangoSetConfig() {
   }
 
   // Enable depth.
-  if (TangoConfig_setBool(config, "config_enable_depth", true) !=
-      TANGO_SUCCESS) {
+  if (TangoConfig_setBool(config, "config_enable_depth", true) !=  TANGO_SUCCESS) {
     LOGE("config_enable_depth Failed");
     return false;
   }
+	if (TangoConfig_setInt32( config, "config_depth_mode", TANGO_POINTCLOUD_XYZC ) != TANGO_SUCCESS) {
+		LOGE("Failed to set the new depth mode");
+		return false;
+	} else {
+		LOGI("successfully using new depth mode");
+	}
 
-  if (TangoConfig_setBool(config, "config_enable_learning_mode", true)
-      != TANGO_SUCCESS) {
-    // Handle the error.
-	  LOGE("AREA LEARNING FAILED");
-  } else {
-	  LOGI("AREA LEARING SUCCESSFUL");
-  }
+//  if (TangoConfig_setBool(config, "config_enable_learning_mode", true)
+//      != TANGO_SUCCESS) {
+//    // Handle the error.
+//	  LOGE("AREA LEARNING FAILED");
+//  } else {
+//	  LOGI("AREA LEARING SUCCESSFUL");
+//  }
 
   // Enable camera.
-  if (TangoConfig_setBool(config, "config_enable_color_camera", true) !=
-      TANGO_SUCCESS) {
+  if (TangoConfig_setBool(config, "config_enable_color_camera", true) != TANGO_SUCCESS) {
     LOGE("config_enable_depth Failed");
     return false;
   } else {
 	  LOGI("ENABLED COLOR CAMERA SUCCESSFULLY");
   }
+  // Enable drift correction.
+//  if (TangoConfig_setBool(config, "config_enable_drift_correction", true) != TANGO_SUCCESS) {
+//	  LOGE("config_enable_drift_correction Failed");
+//	  return false;
+//  } else {
+//	  LOGI("ENABLED DRIFT CORRECTION SUCCESSFULLY");
+//  }
 
-	if (TangoConfig_setBool(config, "config_enable_low_latency_imu_integration", false) !=
-			TANGO_SUCCESS) {
-		LOGE("config_enable_low_latency_imu_integration Failed");
-	} else {
-		LOGI("SUCCESSFULLY DISABLED LOW LATENCY POSE");
-	}
-	if (TangoConfig_setBool(config, "config_high_rate_pose", false) !=
-			TANGO_SUCCESS) {
-		LOGE("config_high_rate_pose Failed");
-	} else {
-		LOGI("SUCCESSFULLY DISABLED HIGH RATE POSE");
-	}
-
+//	// this seems to make things less accurate when it is turned on
+//	if (TangoConfig_setBool(config, "config_enable_low_latency_imu_integration", false) != TANGO_SUCCESS) {
+//		LOGE("config_enable_low_latency_imu_integration Failed");
+//	} else {
+//		LOGI("SUCCESSFULLY DISABLED LOW LATENCY POSE");
+//	}
+//	// this seems to make things less accurate when it is turned on
+//	if (TangoConfig_setBool(config, "config_high_rate_pose", false) != TANGO_SUCCESS) {
+//		LOGE("config_high_rate_pose Failed");
+//		return false;
+//	} else {
+//		LOGI("SUCCESSFULLY DISABLED HIGH RATE POSE");
+//	}
+//	// this seems to make things less accurate when it is turned on
+//	if (TangoConfig_setBool(config, "config_smooth_pose", false) != TANGO_SUCCESS) {
+//		LOGE("config_smooth_pose Failed");
+//		return false;
+//	} else {
+//		LOGI("SUCCESSFULLY DISABLED POSE SMOOTHING");
+//	}
   return true;
 }
 
@@ -377,9 +428,11 @@ bool TangoConnectCallbacks() {
   }
 
   // Attach the onXYZijAvailable callback.
-  if (TangoService_connectOnXYZijAvailable(onXYZijAvailable) != TANGO_SUCCESS) {
-	  LOGI("TangoService_connectOnXYZijAvailable(): Failed");
+  if (TangoService_connectOnPointCloudAvailable(onPointCloudAvailable) != TANGO_SUCCESS) {
+	  LOGI("TangoService_connectOnPointCloudAvailable(): Failed");
 	  return false;
+  } else {
+	  LOGI("Sucessfully connected point clouds");
   }
 
   TangoCoordinateFramePair* pairs = (TangoCoordinateFramePair*)malloc(2*sizeof(TangoCoordinateFramePair));
@@ -394,7 +447,35 @@ bool TangoConnectCallbacks() {
     LOGI("TangoService_connectOnPoseAvailable(): Failed");
     return false;
   }
-  return true;
+	LOGI("Starting to setup the  mutexes");
+	if (pthread_mutex_init(&pointCloudLock, NULL) != 0)
+	{
+		LOGE("mutex init failed");
+		return false;
+	}
+	if (pthread_mutex_init(&fisheyeImageLock, NULL) != 0)
+	{
+		LOGE("mutex init failed");
+		return false;
+	}
+	if (pthread_mutex_init(&poseLock, NULL) != 0)
+	{
+		LOGE("mutex init failed");
+		return false;
+	}
+
+	if (pthread_mutex_init(&areaPoseLock, NULL) != 0)
+	{
+		LOGE("mutex init failed");
+		return false;
+	}
+	if (pthread_mutex_init(&colorImageLock, NULL) != 0)
+	{
+		LOGE("mutex init failed");
+		return false;
+	}
+
+	return true;
 }
 
 bool TangoConnect() {
@@ -439,37 +520,63 @@ JNIEXPORT void JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJ
   DisconnectTango();
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnArrayColor(JNIEnv *env, jobject This)
+JNIEXPORT jbyteArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnArrayColor(JNIEnv *env, jobject This, jdoubleArray frameTimeStamp)
 {
 	pixelBufferColor = (*env)->NewByteArray(env, bufferSizeColor);
+	pthread_mutex_lock(&colorImageLock);
+	jdouble* ts = (*env)->GetDoubleArrayElements(env, frameTimeStamp,NULL);
+    ts[0] = lastColorFrameTimeStamp;
+	(*env)->ReleaseDoubleArrayElements(env, frameTimeStamp, ts, 0);
 	convertToRGBAWithStride(IMAGE_WIDTH_COLOR, IMAGE_WIDTH_COLOR, IMAGE_HEIGHT_COLOR, color_image_buffer_copy, colorCameraImageBufferRGBA);
 	(*env)->SetByteArrayRegion (env, pixelBufferColor, 0, bufferSizeColor, colorCameraImageBufferRGBA);
-    return pixelBufferColor;
+	pthread_mutex_unlock(&colorImageLock);
+
+	return pixelBufferColor;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnArrayFisheye(JNIEnv *env, jobject This)
+JNIEXPORT jbyteArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnArrayFisheye(JNIEnv *env, jobject This, jdoubleArray frameTimeStamp)
 {
 	pixelBufferFisheye = (*env)->NewByteArray(env, bufferSizeFisheye);
+	pthread_mutex_lock(&fisheyeImageLock);
+	jdouble* ts = (*env)->GetDoubleArrayElements(env, frameTimeStamp,NULL);
+	ts[0] = lastFisheyeFrameTimeStamp;
+	(*env)->ReleaseDoubleArrayElements(env, frameTimeStamp, ts, 0);
 	convertToRGBAWithStride(IMAGE_STRIDE_FISHEYE, IMAGE_WIDTH_FISHEYE, IMAGE_HEIGHT_FISHEYE, fisheye_image_buffer_copy, fisheyeCameraImageBufferRGBA);
 	(*env)->SetByteArrayRegion (env, pixelBufferFisheye, 0, bufferSizeFisheye, fisheyeCameraImageBufferRGBA);
-    return pixelBufferFisheye;
+	pthread_mutex_unlock(&fisheyeImageLock);
+
+	return pixelBufferFisheye;
 }
 
 JNIEXPORT jdouble JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_getColorFrameTimestamp(JNIEnv *env, jobject This)
 {
-	return lastColorFrameTimeStamp;
+	double lastColorFrameTimeStampCopy;
+
+	pthread_mutex_lock(&colorImageLock);
+	lastColorFrameTimeStampCopy = lastColorFrameTimeStamp;
+	pthread_mutex_unlock(&colorImageLock);
+
+	return lastColorFrameTimeStampCopy;
 }
 
 
 JNIEXPORT jdouble JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_getFisheyeFrameTimestamp(JNIEnv *env, jobject This)
 {
-	return lastFisheyeFrameTimeStamp;
+	double lastFisheyeFrameTimeStampCopy;
+
+	pthread_mutex_lock(&fisheyeImageLock);
+	lastFisheyeFrameTimeStampCopy = lastFisheyeFrameTimeStamp;
+	pthread_mutex_unlock(&fisheyeImageLock);
+
+	return lastFisheyeFrameTimeStampCopy;
 }
 
 JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnPoseArray(JNIEnv *env, jobject This)
 {
 	jdoubleArray poseDoubleArray = (*env)->NewDoubleArray(env, 10);
+	pthread_mutex_lock(&poseLock);
 	(*env)->SetDoubleArrayRegion (env, poseDoubleArray, 0, 10, poseBuffer);
+	pthread_mutex_unlock(&poseLock);
     return poseDoubleArray;
 }
 
@@ -477,8 +584,10 @@ JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotang
 JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnPoseAreaArray(JNIEnv *env, jobject This)
 {
 	jdoubleArray poseDoubleArray = (*env)->NewDoubleArray(env, 10);
+	pthread_mutex_lock(&areaPoseLock);
 	(*env)->SetDoubleArrayRegion (env, poseDoubleArray, 0, 10, poseBufferArea);
-    return poseDoubleArray;
+	pthread_mutex_unlock(&areaPoseLock);
+	return poseDoubleArray;
 }
 
 JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnIntrinsicsColor(JNIEnv *env, jobject This)
@@ -534,8 +643,11 @@ JNIEXPORT jdoubleArray JNICALL Java_com_projecttango_experiments_nativehellotang
 JNIEXPORT jfloatArray JNICALL Java_com_projecttango_experiments_nativehellotango_TangoJNINative_returnPointCloud(JNIEnv *env, jobject This)
 {
 	// could have a race condition here
+	pthread_mutex_lock(&pointCloudLock);
 	int xyzValidCopy = xyzValid;
 	jfloatArray pointCloudFloatArray = (*env)->NewFloatArray(env, xyzValidCopy*3+1);
 	(*env)->SetFloatArrayRegion (env, pointCloudFloatArray, 0, xyzValidCopy*3+1, xyzBuffer);
-    return pointCloudFloatArray;
+	pthread_mutex_unlock(&pointCloudLock);
+
+	return pointCloudFloatArray;
 }
