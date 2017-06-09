@@ -30,10 +30,11 @@ class UDPhandle(decorators.Decorator):
                     if end_loc == -1:
                         end_loc = backlog[len(dec_kwargs['start_delim']):].find(dec_kwargs['start_delim'])
                         if end_loc != -1:
-                            recovered_partial_packet = True
-                            end_loc += len(dec_kwargs['start_delim'])
+                            start_loc = end_loc + len(dec_kwargs['start_delim'])
+                            backlog = backlog[start_loc:]
+                            break
                         else:
-                            # check for a new packet start which could indicate that som
+                            # check for a new packet start which could indicate that something weird happened
                             data_remains = False
                             break
 
