@@ -33,8 +33,10 @@ end_point_cloud_marker = 'POINTCLOUDENDINGRIGHTNOW\n'
 
 @UDPhandle(port=11112, start_delim=begin_point_cloud_marker, end_delim=end_point_cloud_marker)
 def handle_pkt(pkt=None):
-    global pub_point_cloud	
-
+    global pub_point_cloud 
+    if len(pkt) % 4 != 0:
+        print "WARNING! BAD POINTCLOUD PACKET"
+        return
     point_cloud_vals = array.array('f')
     point_cloud_vals.fromstring(pkt[:4*(len(pkt)//4)])
     point_cloud_vals.byteswap()
