@@ -10,6 +10,8 @@
    <param name="camera_name" value="fisheye_camera"/>
 </node>
 
+<node pkg="tango_streamer" type="command_relay.py" name="command_relay" output="screen"/>
+
 <node pkg="tango_streamer" type="intrinsics_server.py" name="intrinsics_server_color">
    <param name="port_number" value="11114" type="int"/>
    <param name="camera_name" value="color_camera"/>
