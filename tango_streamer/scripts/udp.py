@@ -11,7 +11,7 @@ class UDPhandle(decorators.Decorator):
             backlog = ""
 
             while True:
-                data = sock.recv(65535)
+                data, addr = sock.recvfrom(65535)
                 backlog += str(data)
 
                 data_remains = True

@@ -24,10 +24,16 @@
 
 <node pkg="tango_streamer" type="pointcloud_server.py" name="pointcloud_server" output="screen"/>
 
-<node pkg="tango_streamer" type="pose_server.py" name="pose_server">
+<node pkg="tango_streamer" type="pose_server.py" name="pose_server" output="screen">
    <param name="port_number" value="11113" type="int"/>
    <param name="pose_topic" value="tango_pose"/>
    <param name="coordinate_frame" value="odom"/>
+</node>
+
+<node pkg="tango_streamer" type="pose_area_server.py" name="pose_area_server" output="screen">
+   <param name="port_number" value="11117" type="int"/>
+   <param name="pose_topic" value="tango_area_pose"/>
+   <param name="coordinate_frame" value="area_learning"/>
 </node>
 
 <node pkg="image_transport" type="republish" name="decompress_fisheye" args="in:=fisheye_camera/image_raw compressed out:=fisheye_camera/image_raw raw"/>

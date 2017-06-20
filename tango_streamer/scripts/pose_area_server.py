@@ -46,7 +46,7 @@ def fix_area_learning_to_odom_transform(area_learning_pose, odom_pose, tf_broadc
     global transform_translation, transform_rotation
     """ Update area_learning to odom transform. """
     try:
-        tf_listener.waitForTransform("device","odom",odom_pose.header.stamp,rospy.Duration(1.0))
+        tf_listener.waitForTransform("real_device","odom",odom_pose.header.stamp,rospy.Duration(1.0))
     except:
         return
 
@@ -59,7 +59,7 @@ def fix_area_learning_to_odom_transform(area_learning_pose, odom_pose, tf_broadc
 
     (translation, rotation) = TransformHelpers.convert_pose_inverse_transform(area_learning_pose.pose)
     p = PoseStamped(pose=TransformHelpers.convert_translation_rotation_to_pose(translation,rotation),
-                    header=Header(stamp=odom_pose.header.stamp,frame_id="device"))
+                    header=Header(stamp=odom_pose.header.stamp,frame_id="real_device"))
     odom_to_area_learning = tf_listener.transformPose("odom", p)
     (transform_translation, transform_rotation) = TransformHelpers.convert_pose_inverse_transform(odom_to_area_learning.pose)
     tf_broadcaster.sendTransform(transform_translation, transform_rotation, odom_pose.header.stamp, "odom", "area_learning")
@@ -80,7 +80,10 @@ tf_listener = None
 
 def handle_tango_clock(msg):
     global tango_clock_offset
+    global tango_clock_valid
+
     tango_clock_offset = msg.data
+    tango_clock_valid = True
 
 def handle_odom_pose(msg):
     #global latest_odom_pose
@@ -113,8 +116,12 @@ tango_clock_offset = -1.0
 def handle_pkt(pkt=None):
     global tango_clock_valid 
     global tango_clock_offset
+
     global tf_broadcaster
     global tf_listener
+
+    if 'tango_clock_valid' not in globals() or 'tango_clock_offset' not in globals() or not tango_clock_valid:
+        return
 
     pose_vals = pkt.split(",")
     tango_timestamp = pose_vals[-3]
@@ -124,19 +131,21 @@ def handle_pkt(pkt=None):
     msg.header.stamp = rospy.Time(tango_clock_offset + float(tango_timestamp))
     msg.header.frame_id = coordinate_frame
 
-    print tango_timestamp
-    msg.pose.position.x = float(pose_vals[0])
-    msg.pose.position.y = float(pose_vals[1])
+    # convert from start of service coordinate system to ROS (https://developers.google.com/tango/apis/c/reference/struct/tango-x-y-zij#xyz) to ROS coordinate system conventions
+    # new x axis is the old y-axis, new y-axis is the negative x-axis
+    # new roll is the old pitch, new pitch is negative of the old roll
+    msg.pose.position.x = float(pose_vals[1])
+    msg.pose.position.y = -float(pose_vals[0])
     msg.pose.position.z = float(pose_vals[2])
 
-    # convert from righthand android to ROS coordinate system conventions (rotate counter-clockwise pi/2 about y-axis, then rotate pi/2 clockwise around x-axis) 
-    q_rotate = quaternion_multiply(quaternion_about_axis(pi/2, [0, 1, 0]), quaternion_about_axis(-pi/2, [1, 0, 0]))  
-    q_trans = quaternion_multiply([float(p) for p in pose_vals[3:]], q_rotate)
+    q_trans = [float(pose_vals[4]), -float(pose_vals[3]), float(pose_vals[5]), float(pose_vals[6])]
 
-    msg.pose.orientation.x = float(q_trans[0])
-    msg.pose.orientation.y = float(q_trans[1])
-    msg.pose.orientation.z = float(q_trans[2])
-    msg.pose.orientation.w = float(q_trans[3])
+    # the pose currently represents the wrong axis, rotate so that it is the x-axis
+    q_trans = quaternion_multiply(q_trans, quaternion_about_axis(pi/2, [0, 1, 0]))
+    msg.pose.orientation.x = q_trans[0]
+    msg.pose.orientation.y = q_trans[1]
+    msg.pose.orientation.z = q_trans[2]
+    msg.pose.orientation.w = q_trans[3]
 
     pub_pose.publish(msg)
     latest_area_learning_pose = msg

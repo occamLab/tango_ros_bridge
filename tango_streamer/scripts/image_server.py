@@ -14,7 +14,6 @@ def handle_tango_clock(msg):
     global tango_clock_offset
     tango_clock_offset = msg.data
 
-
 #rospy to interface with ROS setup
 rospy.init_node("image_server")
 
@@ -43,11 +42,6 @@ def handle_pkt(pkt=None):
         return 
         
     ts = float(pkt[ts_begin_loc+len(begin_timestamp_marker):ts_end_loc])
-	
-#    if ts > last_ts:
-#	last_ts = ts
-#    else:
-#	return
 
     pkt = pkt[ts_end_loc+len(end_timestamp_marker):]
 
