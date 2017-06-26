@@ -38,32 +38,27 @@ def handle_pkt(pkt=None):
     if len(pkt) % 4 != 0:
         print "WARNING! BAD POINTCLOUD PACKET"
         return
-    msg = PointCloud2()
-    point_cloud_vals = array.array('B')
+    point_cloud_vals = array.array('f')
     point_cloud_vals.fromstring(pkt[:4*(len(pkt)//4)])
-    #point_cloud_vals.byteswap()
-    #timestamp = #point_cloud_vals[0:4]
-    point_cloud_vals = point_cloud_vals[4:]
-    if len(point_cloud_vals)>1:
+    point_cloud_vals.byteswap()
+    timestamp = point_cloud_vals[0]
+    point_cloud_vals = point_cloud_vals[1:]
 
-        msg.header = Header(stamp = rospy.Time.now(), frame_id='depth_camera')
-        msg.data = point_cloud_vals
-        msg.height = 1
-        msg.width = len(point_cloud_vals)/16
-        msg.point_step = 16
-        msg.is_dense = True
+    if len(point_cloud_vals)>1:
         pointfields = []
         names = ('x','y','z','c')
-        for i in range(4):
-            pointfields.append(PointField(name = names[i], offset = 4*i, datatype= 7, count = 0))
-        msg.fields = pointfields
-        #msg = create_cloud_xyz32(newheader, point_cloud_vals)
-        #for i in range(0,len(point_cloud_vals)-3,4):
-        #    if abs(point_cloud_vals[i]) < 10**-5 or abs(point_cloud_vals[i+1]) < 10**-5 or abs(point_cloud_vals[i+2]) < 10**-5:
-        #        continue
-            # note we are currently ignoring the confidence value
-        #    msg.points.append(Point32(x=point_cloud_vals[i], y=point_cloud_vals[i+1], z=point_cloud_vals[i+2]))
-        print(msg.width)
+
+        for i, name in enumerate(names):
+            pointfields.append(PointField(name=name, offset=4*i, datatype=PointField.FLOAT32, count=1))
+        # fix this timestamp
+        msg = PointCloud2(header=Header(stamp=rospy.Time(tango_clock_offset + float(timestamp)),
+                                        frame_id='depth_camera'),
+                          height=1,
+                          width=len(point_cloud_vals)/4,
+                          point_step=16,
+                          is_dense=True,
+                          data=point_cloud_vals.tostring(),
+                          fields=pointfields)
         pub_point_cloud.publish(msg)
 
 handle_pkt()
