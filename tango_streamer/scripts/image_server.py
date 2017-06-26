@@ -40,8 +40,15 @@ def handle_pkt(pkt=None):
         #something's fishy, discard jpeg
         print "JPEG discarded, malformed data"
         return 
-        
-    ts = float(pkt[ts_begin_loc+len(begin_timestamp_marker):ts_end_loc])
+
+    try:
+        ts = float(pkt[ts_begin_loc+len(begin_timestamp_marker):ts_end_loc])
+    except Exception as inst:
+        # occasionally we are getting packets that seem to have multiple frames in them...  This results in
+        # the timestamp being malformed which causes an exception (TODO: look into what could be causing
+        # this on the Android side)
+        print inst
+        return
 
     pkt = pkt[ts_end_loc+len(end_timestamp_marker):]
 

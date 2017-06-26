@@ -1,0 +1,7 @@
+<launch>
+  <arg name="bag_file"/>
+  <node name="bagplayer" pkg="rosbag" type="play" args="--clock $(arg bag_file)"/>
+  <node pkg="image_transport" type="republish" name="decompress_fisheye" args="in:=fisheye_camera/image_raw compressed out:=fisheye_camera/image_raw raw"/>
+    <node pkg="image_transport" type="republish" name="decompress_color" args="in:=color_camera/image_raw compressed out:=color_camera/image_raw raw"/>
+       <node pkg="image_transport" type="republish" name="decompress_fisheye_undistorted" args="in:=fisheye_undistorted/image_raw compressed out:=fisheye_undistorted/image_raw raw"/>
+</launch>
