@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/../cpp_basic_examples.iml" filepath="$PROJECT_DIR$/../cpp_basic_examples.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../cpp_example_util/app/cpp_example_util.iml" filepath="$PROJECT_DIR$/../../cpp_example_util/app/cpp_example_util.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../hello_area_description/hello_area_description.iml" filepath="$PROJECT_DIR$/../hello_area_description/hello_area_description.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../hello_depth_perception/hello_depth_perception.iml" filepath="$PROJECT_DIR$/../hello_depth_perception/hello_depth_perception.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../hello_motion_tracking/hello_motion_tracking.iml" filepath="$PROJECT_DIR$/../hello_motion_tracking/hello_motion_tracking.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../hello_video/hello_video.iml" filepath="$PROJECT_DIR$/../hello_video/hello_video.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ros_streamer.iml" filepath="$PROJECT_DIR$/ros_streamer.iml" />
+    </modules>
+  </component>
+</project>

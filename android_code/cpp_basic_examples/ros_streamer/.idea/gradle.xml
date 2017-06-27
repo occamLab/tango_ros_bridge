@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="distributionType" value="DEFAULT_WRAPPED" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/.." />
+            <option value="$PROJECT_DIR$/../hello_area_description" />
+            <option value="$PROJECT_DIR$/../hello_depth_perception" />
+            <option value="$PROJECT_DIR$/../hello_motion_tracking" />
+            <option value="$PROJECT_DIR$/../hello_video" />
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/../../cpp_example_util/app" />
+          </set>
+        </option>
+        <option name="resolveModulePerSourceSet" value="false" />
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>

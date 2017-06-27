@@ -1,4 +1,0 @@
-<resources>
-    <string name="app_name">ROS Streamer</string>
-    <string name="app_name_long">ROS UDP Streaming</string>
-</resources>
