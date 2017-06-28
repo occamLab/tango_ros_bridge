@@ -46,7 +46,7 @@ def handle_pkt(pkt=None):
 
     if len(point_cloud_vals)>1:
         pointfields = []
-        names = ('x','y','z','c')
+        names = ('x','y','z')
 
         for i, name in enumerate(names):
             pointfields.append(PointField(name=name, offset=4*i, datatype=PointField.FLOAT32, count=1))
