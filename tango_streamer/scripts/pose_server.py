@@ -115,17 +115,23 @@ def handle_pose(pose_vals):
     else:
         # assume we are using the Phab2 pro
         # publish static transform
-        br.sendTransform([-0.038881, 0.000087, 0.001398],
-                         [-0.003793, 0.003856, 0.005584, -0.999970],
+        br.sendTransform([0.050398, 0.000514, -0.000414],
+                         [0.001877, 0.003729, 0.999991, 0.001068],
                          msg.header.stamp,      # use the same time stamp as the pose update
                          "fisheye_camera",
+                         "color_camera")
+
+        br.sendTransform([0.010961, 0.000060, 0.001914],
+                         [-0.000778, 0.002971, 0.999995, -0.000534],
+                         msg.header.stamp,      # use the same time stamp as the pose update
+                         "color_camera",
                          "depth_camera")
 
         br.sendTransform([ 0.006841, 0.035824, -0.002991],
                          [ -2.09300111e-03,   2.37000126e-04,  -7.14237379e-01, 6.99900371e-01],
                          msg.header.stamp,      # use the same time stamp as the pose update
                          "depth_camera",
-                             "device")
+                         "device")
     # TODO: could transform directly to real_device and remove device_ros
     br.sendTransform([ 0.0, 0.0, 0.0 ],
                      [ 0.          ,  0.          , -0.7071066662,  0.7071068962],
