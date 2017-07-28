@@ -189,7 +189,7 @@ bool TangoSetConfig(bool streamColorImages) {
     }
     // disable high rate pose
     if (TangoConfig_setBool(config, "config_high_rate_pose", false) !=  TANGO_SUCCESS) {
-        LOGE("turning off low latency IMU Failed");
+        LOGE("turning off high rate pose Failed");
         return false;
     }
     // Enable depth.
@@ -212,8 +212,8 @@ bool TangoSetConfig(bool streamColorImages) {
         LOGI("ENABLED COLOR CAMERA SUCCESSFULLY %d", streamColorImages);
     }
 
-    // Enable drift corrected pose.
-    if (TangoConfig_setBool(config, "config_enable_drift_correction", true) != TANGO_SUCCESS) {
+    // disable drift corrected pose.
+    if (TangoConfig_setBool(config, "config_enable_drift_correction", false) != TANGO_SUCCESS) {
         LOGE("config_enable_drift_correction");
         return false;
     } else {
