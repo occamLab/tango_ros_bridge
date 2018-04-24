@@ -1,8 +1,8 @@
-# Streaming Sensor Data to Rapidly Prototype Augmented Reality Apps
+# Streaming Sensor Data in order to Rapidly Prototype Augmented Reality Apps
 
 `tango_ros_bridge` allows you to stream sensor data from a Google Tango smartphone directly to any computer running ROS.  Streaming data in this manner allows you to program apps the utilize the rich sensor data of Tango (fisheye camera, 3D location tracking, and 3D point clouds) using any of the programming languages supported by ROS (Python and C++).  Additionally, you will be able to leverage all of the powerful features of ROS (e.g., visualization tools, debugging tools, recording tools) from the comfort of your own laptop (or other computer).
 
-TODO: add some screen shots
+![A screenshot showing 3D data from a Tango smartphone being displayed in RVIZ, a visualization program for ROS](images/tango_ros_bridge_screenshot_1.png)
 
 # Getting Started
 `ros_tango_bridge` has two components you will need to configure: an Android app that runs on your Tango smartphone and a ROS package that should be installed on your ROS computer.
@@ -25,8 +25,6 @@ $ git clone https://github.com/occamLab/tango_ros_bridge
 ## Building and Installing the Android App
 
 An [Android Studio](https://developer.android.com/studio/index.html) project is included as part of the repository under the `android_code` subdirectory.  Use Android Studio to build and install the app to your Tango-equipped smartphone.
-
-![A screenshot showing 3D data from a Tango smartphone being displayed in RVIZ, a visualization program for ROS](images/ros_tango_bridge_screenshot_1.png)
 
 ## Installing the ROS package
 
@@ -91,9 +89,11 @@ pose:
 
 # Software Architecture
 
-`tango_ros_bridge` consists of two main components: an Android app and a ROS package.  The interplay between these two components is shown in our architecture diagram.
+`tango_ros_bridge` consists of two main components: an Android app and a ROS package.
 
-Todo: make a caption
+![The high-level architecture of ros_tango_bridge.  Details are available in the figure caption](images/tango_ros_bridge_architecture.png)
+
+The architecture diagram shows the interplay between the Android app and the ROS package.  The two components communicate over an IP-based network using both UDP and TCP sockets.  The ros package converts the raw sensor data to an appropriate ROS message and publishes it in on a topic so that it can be consumed by client ROS nodes.
 
 # Examples
 
