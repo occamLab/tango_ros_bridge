@@ -97,7 +97,17 @@ The architecture diagram shows the interplay between the Android app and the ROS
 
 # Sample Use Cases
 
-If I had more time, I would record some screen captures of the system in use.
+## 3D mapping of a building using April Tags
+
+![Corrected (red) and uncorrected (blue) paths through Olin's academic center](images/ac_map.jpg)
+
+William Derksen utilized this platform to build a 3D map of Olin's academic center.  The image below shows a side view of two paths through all four floors of the academic center.  The *red* path is the raw sensor data as determined by the Tango phone and the *blue path* is a corrected version that utilized special optical landmarks for drift correction.
+
+## Simple dense 3D mapping
+
+Outline of content to be generated:
+* Create a screen capture of creating a rough 3D map using RViz and raw point cloud data.
+* The screen capture will show the phone moving around in space, with point clouds being projected using rviz. By the end of the video, the structure of the room will be clearly visible.
 
 # Project History
 
